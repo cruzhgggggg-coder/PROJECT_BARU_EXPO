@@ -603,7 +603,7 @@ func CreateConsultationV2(c *gin.Context) {
 			}
 			var extractedText string
 			if imageExts[ext] {
-				extractedText, _ = processAnnotationImage(savePath, user.GeminiKey)
+				extractedText, _ = processAnnotationImage(savePath, user)
 			} else if ext == ".docx" {
 				extractedText, _ = utils.ExtractDocxTrackChanges(savePath)
 			} else {
@@ -659,10 +659,10 @@ func CreateConsultationV2(c *gin.Context) {
 				} else {
 					continue
 				}
-				var extractedText string
-				if fileType == models.AnnotationImage {
-					extractedText, _ = processAnnotationImage(savedPath, user.GeminiKey)
-				} else {
+			var extractedText string
+			if fileType == models.AnnotationImage {
+				extractedText, _ = processAnnotationImage(savedPath, user)
+			} else {
 					extractedText, _ = utils.ExtractDocxTrackChanges(savedPath)
 				}
 				ann := models.RevisionAnnotation{

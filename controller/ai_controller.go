@@ -3,6 +3,7 @@ package controller
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -531,6 +532,345 @@ func callGemini(apiKey, model, systemPrompt, userPrompt string, isJSON bool) (st
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  VISION SUPPORT — MULTI-PROVIDER IMAGE ANALYSIS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Known vision-capable models per provider (used for filtering + fallback)
+var visionCapableNVIDIAModels = map[string]bool{
+	"meta/llama-3.2-vision-11b-instruct":  true,
+	"meta/llama-3.2-11b-vision-instruct":  true,
+	"nvidia/vila":                          true,
+	"nvidia/neva-22b":                      true,
+}
+
+var visionCapableOpenAIModels = map[string]bool{
+	"gpt-4o":       true,
+	"gpt-4o-mini":  true,
+	"gpt-4-turbo":  true,
+}
+
+var visionCapableAnthropicModels = map[string]bool{
+	"claude-3-5-sonnet-20241022": true,
+	"claude-3-5-haiku-20241022":  true,
+	"claude-3-opus-20240229":     true,
+	"claude-3-5-sonnet-20240620": true,
+}
+
+// detectMIMEType returns the MIME type for an image file based on extension
+func detectMIMEType(imagePath string) string {
+	ext := strings.ToLower(filepath.Ext(imagePath))
+	switch ext {
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	case ".gif":
+		return "image/gif"
+	default:
+		return "image/jpeg"
+	}
+}
+
+// callNVIDIAVision sends an image to NVIDIA NIM vision models via OpenAI-compatible API
+func callNVIDIAVision(apiKey, model, systemPrompt, userPrompt, imagePath string) (string, error) {
+	if apiKey == "" {
+		apiKey = os.Getenv("NVIDIA_API_KEY")
+	}
+	if apiKey == "" {
+		return "", errors.New("NVIDIA_API_KEY is not set")
+	}
+	if model == "" {
+		model = "meta/llama-3.2-vision-11b-instruct"
+	}
+
+	imgData, err := os.ReadFile(imagePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read image: %v", err)
+	}
+	mimeType := detectMIMEType(imagePath)
+	b64Data := base64.StdEncoding.EncodeToString(imgData)
+	dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, b64Data)
+
+	fmt.Printf("\033[34m[NVIDIA VISION] Model: %s | Image: %s (%.2f KB)\033[0m\n",
+		model, filepath.Base(imagePath), float64(len(imgData))/1024)
+
+	reqBody := map[string]interface{}{
+		"model": model,
+		"messages": []map[string]interface{}{
+			{
+				"role":    "system",
+				"content": systemPrompt,
+			},
+			{
+				"role": "user",
+				"content": []map[string]interface{}{
+					{"type": "text", "text": userPrompt},
+					{"type": "image_url", "image_url": map[string]string{"url": dataURL}},
+				},
+			},
+		},
+	}
+
+	jsonData, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "https://integrate.api.nvidia.com/v1/chat/completions", bytes.NewBuffer(jsonData))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("NVIDIA Vision API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var nvidiaResp NVIDIAResponse
+	if err := json.Unmarshal(body, &nvidiaResp); err != nil {
+		return "", err
+	}
+	if len(nvidiaResp.Choices) == 0 {
+		return "", errors.New("NVIDIA Vision returned no choices")
+	}
+
+	fmt.Printf("\033[32m[NVIDIA VISION] Response received — %d chars\033[0m\n", len(nvidiaResp.Choices[0].Message.Content))
+	return nvidiaResp.Choices[0].Message.Content, nil
+}
+
+// callOpenAIVision sends an image to OpenAI vision models
+func callOpenAIVision(apiKey, model, systemPrompt, userPrompt, imagePath string) (string, error) {
+	if apiKey == "" {
+		apiKey = os.Getenv("OPENAI_API_KEY")
+	}
+	if model == "" {
+		model = "gpt-4o"
+	}
+
+	imgData, err := os.ReadFile(imagePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read image: %v", err)
+	}
+	mimeType := detectMIMEType(imagePath)
+	b64Data := base64.StdEncoding.EncodeToString(imgData)
+	dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, b64Data)
+
+	fmt.Printf("\033[36m[OPENAI VISION] Model: %s | Image: %s (%.2f KB)\033[0m\n",
+		model, filepath.Base(imagePath), float64(len(imgData))/1024)
+
+	reqBody := map[string]interface{}{
+		"model": model,
+		"messages": []map[string]interface{}{
+			{
+				"role":    "system",
+				"content": systemPrompt,
+			},
+			{
+				"role": "user",
+				"content": []map[string]interface{}{
+					{"type": "text", "text": userPrompt},
+					{"type": "image_url", "image_url": map[string]string{"url": dataURL}},
+				},
+			},
+		},
+	}
+
+	jsonData, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(jsonData))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("OpenAI Vision API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var openaiResp NVIDIAResponse
+	if err := json.Unmarshal(body, &openaiResp); err != nil {
+		return "", err
+	}
+	if len(openaiResp.Choices) == 0 {
+		return "", errors.New("OpenAI Vision returned no choices")
+	}
+
+	fmt.Printf("\033[32m[OPENAI VISION] Response received — %d chars\033[0m\n", len(openaiResp.Choices[0].Message.Content))
+	return openaiResp.Choices[0].Message.Content, nil
+}
+
+// callGeminiVision sends an image to Google Gemini Vision models
+func callGeminiVision(apiKey, model, systemPrompt, userPrompt, imagePath string) (string, error) {
+	if apiKey == "" {
+		apiKey = os.Getenv("GEMINI_API_KEY")
+	}
+	if apiKey == "" {
+		return "", errors.New("GEMINI_API_KEY is not set")
+	}
+	if model == "" {
+		model = "gemini-2.0-flash"
+	}
+
+	imgData, err := os.ReadFile(imagePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read image: %v", err)
+	}
+	mimeType := detectMIMEType(imagePath)
+
+	fmt.Printf("\033[35m[GEMINI VISION] Model: %s | Image: %s (%.2f KB)\033[0m\n",
+		model, filepath.Base(imagePath), float64(len(imgData))/1024)
+
+	ctx := context.Background()
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: apiKey})
+	if err != nil {
+		return "", fmt.Errorf("failed to create Gemini client: %v", err)
+	}
+
+	content := &genai.Content{
+		Parts: []*genai.Part{
+			{Text: systemPrompt + "\n\n" + userPrompt},
+			{InlineData: &genai.Blob{MIMEType: mimeType, Data: imgData}},
+		},
+	}
+
+	resp, err := client.Models.GenerateContent(ctx, model, []*genai.Content{content}, nil)
+	if err != nil {
+		return "", fmt.Errorf("Gemini Vision API error: %v", err)
+	}
+	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+		return "", errors.New("Gemini Vision returned no content")
+	}
+
+	result := resp.Candidates[0].Content.Parts[0].Text
+	fmt.Printf("\033[32m[GEMINI VISION] Response received — %d chars\033[0m\n", len(result))
+	return result, nil
+}
+
+// callAnthropicVision sends an image to Anthropic Claude Vision models
+func callAnthropicVision(apiKey, model, systemPrompt, userPrompt, imagePath string) (string, error) {
+	if apiKey == "" {
+		apiKey = os.Getenv("ANTHROPIC_API_KEY")
+	}
+	if model == "" {
+		model = "claude-3-5-sonnet-20241022"
+	}
+
+	imgData, err := os.ReadFile(imagePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read image: %v", err)
+	}
+	mimeType := detectMIMEType(imagePath)
+	b64Data := base64.StdEncoding.EncodeToString(imgData)
+
+	fmt.Printf("\033[36m[ANTHROPIC VISION] Model: %s | Image: %s (%.2f KB)\033[0m\n",
+		model, filepath.Base(imagePath), float64(len(imgData))/1024)
+
+	reqBody := map[string]interface{}{
+		"model":      model,
+		"max_tokens": 4096,
+		"system":     systemPrompt,
+		"messages": []map[string]interface{}{
+			{
+				"role": "user",
+				"content": []map[string]interface{}{
+					{
+						"type": "image",
+						"source": map[string]string{
+							"type":       "base64",
+							"media_type": mimeType,
+							"data":       b64Data,
+						},
+					},
+					{"type": "text", "text": userPrompt},
+				},
+			},
+		},
+	}
+
+	jsonData, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "https://api.anthropic.com/v1/messages", bytes.NewBuffer(jsonData))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Anthropic Vision API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", err
+	}
+	if len(result.Content) == 0 {
+		return "", errors.New("Anthropic Vision returned no content")
+	}
+
+	fmt.Printf("\033[32m[ANTHROPIC VISION] Response received — %d chars\033[0m\n", len(result.Content[0].Text))
+	return result.Content[0].Text, nil
+}
+
+// callAIVision routes image analysis to the appropriate provider based on user settings
+func callAIVision(user *models.User, systemPrompt, userPrompt, imagePath string) (string, error) {
+	provider := strings.ToLower(os.Getenv("AI_PROVIDER"))
+	model := ""
+	apiKey := ""
+
+	// AI Gateway Logic: Override if user has keys
+	if user != nil {
+		if user.PreferredModel != "" && user.PreferredModel != "default" {
+			parts := strings.Split(user.PreferredModel, ":")
+			if len(parts) == 2 {
+				provider = strings.ToLower(parts[0])
+				model = parts[1]
+			}
+		}
+
+		switch provider {
+		case "openai":
+			apiKey = user.OpenAIKey
+		case "nvidia":
+			apiKey = user.NvidiaKey
+		case "gemini":
+			apiKey = user.GeminiKey
+		case "anthropic":
+			apiKey = user.AnthropicKey
+		}
+	}
+
+	switch provider {
+	case "gemini":
+		return callGeminiVision(apiKey, model, systemPrompt, userPrompt, imagePath)
+	case "anthropic":
+		return callAnthropicVision(apiKey, model, systemPrompt, userPrompt, imagePath)
+	case "openai":
+		return callOpenAIVision(apiKey, model, systemPrompt, userPrompt, imagePath)
+	case "nvidia":
+		return callNVIDIAVision(apiKey, model, systemPrompt, userPrompt, imagePath)
+	default:
+		return callNVIDIAVision("", "", systemPrompt, userPrompt, imagePath)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  ANALYSIS LOGIC (GROQ + NVIDIA)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -714,10 +1054,12 @@ func GetAIModels(c *gin.Context) {
 		return
 	}
 
-	var models []string
+	var allModels []string
 	for _, m := range response.Data {
-		models = append(models, m.ID)
+		if visionCapableNVIDIAModels[m.ID] {
+			allModels = append(allModels, m.ID)
+		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"models": models})
+	c.JSON(http.StatusOK, gin.H{"models": allModels})
 }

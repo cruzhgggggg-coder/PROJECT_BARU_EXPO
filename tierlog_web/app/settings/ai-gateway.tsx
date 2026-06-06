@@ -27,9 +27,9 @@ const PROVIDER_MODELS: Record<string, { label: string; value: string; desc: stri
     { label: "Claude 3 Opus", value: "anthropic:claude-3-opus-20240229", desc: "Excellent for complex theoretical analysis and logic mapping." },
   ],
   nvidia: [
-    { label: "Llama 3.1 70B Instruct", value: "nvidia:meta/llama-3.1-70b-instruct", desc: "Meta's flagship open-weights model hosted on NVIDIA infrastructure." },
-    { label: "Nemotron 70B Instruct", value: "nvidia:nvidia/llama-3.1-nemotron-70b-instruct", desc: "NVIDIA-optimized model for highly natural conversational flows." },
-    { label: "Mixtral 8x22B Instruct", value: "nvidia:mistralai/mixtral-8x22b-instruct-v0.1", desc: "High-performance Mixture of Experts (MoE) model." },
+    { label: "Llama 3.2 Vision 11B", value: "nvidia:meta/llama-3.2-vision-11b-instruct", desc: "Meta's vision model — supports image OCR + text analysis in one model." },
+    { label: "NVIDIA VILA", value: "nvidia:nvidia/vila", desc: "NVIDIA's Vision-Language model for image understanding & document OCR." },
+    { label: "NVIDIA NEVA 22B", value: "nvidia:nvidia/neva-22b", desc: "NVIDIA's vision-focused model optimized for academic document analysis." },
   ],
 };
 
