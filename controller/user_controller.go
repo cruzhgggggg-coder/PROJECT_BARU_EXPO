@@ -116,6 +116,9 @@ func UpdateAIGatewaySettings(c *gin.Context) {
 	user.NvidiaKey = req.NvidiaKey
 	user.PreferredModel = req.PreferredModel
 
+	// Encrypt API keys before storing
+	encryptUserKeys(&user)
+
 	if err := koneksi.DB.Save(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save settings: " + err.Error()})
 		return

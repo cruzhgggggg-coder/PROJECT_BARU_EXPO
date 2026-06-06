@@ -28,28 +28,45 @@ func SetRealtimeHub(hub *realtime.Hub) {
 	WebSocketHub = hub
 }
 
+// encryptUserKeys encrypts all API key fields before database storage.
+func encryptUserKeys(user *models.User) {
+	user.OpenAIKey, _ = auth.EncryptAES(user.OpenAIKey)
+	user.GeminiKey, _ = auth.EncryptAES(user.GeminiKey)
+	user.AnthropicKey, _ = auth.EncryptAES(user.AnthropicKey)
+	user.NvidiaKey, _ = auth.EncryptAES(user.NvidiaKey)
+	user.GroqKey, _ = auth.EncryptAES(user.GroqKey)
+}
+
+// decryptUserKeys decrypts all API key fields after database read.
+func decryptUserKeys(user *models.User) {
+	user.OpenAIKey, _ = auth.DecryptAES(user.OpenAIKey)
+	user.GeminiKey, _ = auth.DecryptAES(user.GeminiKey)
+	user.AnthropicKey, _ = auth.DecryptAES(user.AnthropicKey)
+	user.NvidiaKey, _ = auth.DecryptAES(user.NvidiaKey)
+	user.GroqKey, _ = auth.DecryptAES(user.GroqKey)
+}
+
 func sanitizeUser(user *models.User) gin.H {
+	// Decrypt API keys before returning in response
+	decrypted := *user
+	decryptUserKeys(&decrypted)
+
 	response := gin.H{
-		"id":                user.ID,
-		"name":              user.Name,
-		"email":             user.Email,
-		"role":              user.Role,
-		"openai_key":        user.OpenAIKey,
-		"gemini_key":        user.GeminiKey,
-		"anthropic_key":     user.AnthropicKey,
-		"nvidia_key":        user.NvidiaKey,
-		"groq_key":          user.GroqKey,
-		"preferred_model":   user.PreferredModel,
-		"is_gateway_active": user.IsGatewayActive,
-		"created_at":        user.CreatedAt,
-		"updated_at":        user.UpdatedAt,
+		"id":                decrypted.ID,
+		"name":              decrypted.Name,
+		"email":             decrypted.Email,
+		"role":              decrypted.Role,
+		"preferred_model":   decrypted.PreferredModel,
+		"is_gateway_active": decrypted.IsGatewayActive,
+		"created_at":        decrypted.CreatedAt,
+		"updated_at":        decrypted.UpdatedAt,
 	}
 
-	if user.Student != nil {
-		response["student"] = user.Student
+	if decrypted.Student != nil {
+		response["student"] = decrypted.Student
 	}
-	if user.Lecturer != nil {
-		response["lecturer"] = user.Lecturer
+	if decrypted.Lecturer != nil {
+		response["lecturer"] = decrypted.Lecturer
 	}
 
 	return response
@@ -385,6 +402,9 @@ func UpdateAIGatewaySettingsV2(c *gin.Context) {
 		user.PreferredModel = req.PreferredModel
 	}
 
+	// Encrypt API keys before storing to database
+	encryptUserKeys(user)
+
 	if err := koneksi.DB.Save(user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -589,6 +609,7 @@ func CreateConsultationV2(c *gin.Context) {
 
 	// ── Process annotation files (optional) ───────────────────────────────────
 	var annotationSummary string
+	extractedTexts := make(map[string]string) // cache extracted text to avoid double API calls
 	if form, formErr := c.MultipartForm(); formErr == nil && len(form.File["annotations"]) > 0 {
 		annotationFiles := form.File["annotations"]
 		fmt.Printf("\033[36m[ANNOTATION] Found %d annotation file(s) — saving & extracting...\033[0m\n", len(annotationFiles))
@@ -609,6 +630,7 @@ func CreateConsultationV2(c *gin.Context) {
 			} else {
 				continue
 			}
+			extractedTexts[filename] = extractedText // cache for DB save step
 			label := fmt.Sprintf("[Anotasi %d — %s]", i+1, fh.Filename)
 			summaryParts = append(summaryParts, label+"\n"+extractedText)
 		}
@@ -642,7 +664,7 @@ func CreateConsultationV2(c *gin.Context) {
 		return
 	}
 
-	// ── Save annotation records linked to the new log ─────────────────────────
+	// ── Save annotation records linked to the new log (reuse cached text) ─────
 	if annotationSummary != "" {
 		if form, formErr := c.MultipartForm(); formErr == nil {
 			annotationFiles := form.File["annotations"]
@@ -650,7 +672,6 @@ func CreateConsultationV2(c *gin.Context) {
 			for i, fh := range annotationFiles {
 				ext := strings.ToLower(filepath.Ext(fh.Filename))
 				filename := fmt.Sprintf("%d_annotation_%d%s", timestamp, i+1, ext)
-				savedPath := filepath.Join("storage", "annotations", filename)
 				var fileType models.AnnotationFileType
 				if imageExts[ext] {
 					fileType = models.AnnotationImage
@@ -659,12 +680,8 @@ func CreateConsultationV2(c *gin.Context) {
 				} else {
 					continue
 				}
-			var extractedText string
-			if fileType == models.AnnotationImage {
-				extractedText, _ = processAnnotationImage(savedPath, user)
-			} else {
-					extractedText, _ = utils.ExtractDocxTrackChanges(savedPath)
-				}
+				// Reuse cached extracted text — no second API call
+				extractedText := extractedTexts[filename]
 				ann := models.RevisionAnnotation{
 					ConsultationLogID: log.ID,
 					Filename:          filename,
@@ -1109,6 +1126,9 @@ Return ONLY valid JSON in this exact shape — no explanation, no markdown, no e
 {"items":[{"id":1,"category":"Major"},{"id":2,"category":"Minor"}]}`
 
 	userPrompt := fmt.Sprintf("Classify the following feedback items:\n%s", string(itemsData))
+
+	// Decrypt API keys before using
+	decryptUserKeys(user)
 
 	aiResponse, err := callAI(user, systemPrompt, userPrompt, true)
 	if err != nil {

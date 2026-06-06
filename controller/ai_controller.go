@@ -884,6 +884,9 @@ func AnalyzeAudioAndPaper(userID uint64, audioPath, paperText, prevFeedback stri
 	var user models.User
 	koneksi.DB.First(&user, userID)
 
+	// Decrypt API keys before using
+	decryptUserKeys(&user)
+
 	// 1. Convert Audio to Text using Groq Whisper
 	transcript, err := transcribeAudio(audioPath, user.GroqKey)
 	if err != nil {
@@ -979,6 +982,9 @@ func GenerateRevisionAssistance(logID uint64, studentQuery string, modelOverride
 		user.PreferredModel = modelOverride
 		user.IsGatewayActive = true // Force active if a specific model is chosen
 	}
+
+	// Decrypt API keys before using
+	decryptUserKeys(user)
 
 	return callAI(user, finalSystemPrompt, studentQuery, false)
 }

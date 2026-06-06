@@ -27,7 +27,7 @@ type AccessClaims struct {
 func jwtSecret() []byte {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		secret = "tierlog-dev-secret"
+		panic("FATAL: JWT_SECRET environment variable is not set. Refusing to start with insecure default.")
 	}
 	return []byte(secret)
 }

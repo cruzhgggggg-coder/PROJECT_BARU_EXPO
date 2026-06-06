@@ -34,9 +34,19 @@ func loadEnv() {
 }
 
 func corsMiddleware() gin.HandlerFunc {
+	allowedOrigins := map[string]bool{
+		"http://localhost:8081":  true, // Expo web dev
+		"http://localhost:19006": true, // Expo web alt port
+		"http://localhost:5173":  true, // Vite dev server
+		"http://localhost:3000":  true, // Common dev port
+	}
+
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		origin := c.Request.Header.Get("Origin")
+		if allowedOrigins[origin] {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 
@@ -94,6 +104,7 @@ func main() {
 	}
 
 	legacyAPI := r.Group("/api")
+	legacyAPI.Use(middleware.AuthRequired())
 	{
 		legacyAPI.POST("/consultation", controller.CreateConsultation)
 		legacyAPI.GET("/consultation", controller.GetConsultations)
@@ -108,12 +119,7 @@ func main() {
 		legacyAPI.POST("/admin/generate-code", controller.GenerateRedeemCode)
 	}
 
-	r.GET("/users", controller.GetUsers)
-	r.POST("/users", controller.CreateUser)
-	r.GET("/lecturers", controller.GetLecturers)
-	r.POST("/lecturers", controller.CreateLecturer)
-	r.GET("/students", controller.GetStudents)
-	r.POST("/students", controller.CreateStudent)
+	// User/lecturer/student CRUD removed — use /auth/register and protected settings endpoints
 
 	fmt.Println("TierLog unified backend is running at http://localhost:8080")
 	_ = r.Run(":8080")
