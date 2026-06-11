@@ -195,10 +195,10 @@ export default function AIGatewayScreen() {
 
   const handlePaste = (provider: string, pastedValue: string) => {
     setActiveAutoSaveProvider(provider);
-    const updates: Partial<User> = {};
     const setter = getKeySetter(provider);
     setter(pastedValue);
-    updates[`${provider}_key`] = pastedValue;
+    const key = `${provider}_key` as keyof User;
+    const updates: Partial<User> = { [key]: pastedValue };
     void save(updates);
   };
 
