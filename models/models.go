@@ -106,14 +106,16 @@ type Student struct {
 }
 
 type ConsultationLog struct {
-	ID                 uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
-	StudentID          uint64         `gorm:"not null" json:"student_id"`
-	AudioFilename      string         `gorm:"type:varchar(255)" json:"audio_filename"`
-	TranscriptFilename string         `gorm:"type:varchar(255)" json:"transcript_filename"`
-	TranscriptText     string         `gorm:"type:longtext" json:"transcript_text"`
-	PaperFilename      string         `gorm:"type:varchar(255)" json:"paper_filename"`
-	CreatedAt          time.Time      `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt          time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
+	ID                     uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
+	StudentID              uint64         `gorm:"not null" json:"student_id"`
+	AudioFilename          string         `gorm:"type:varchar(255)" json:"audio_filename"`
+	TranscriptFilename     string         `gorm:"type:varchar(255)" json:"transcript_filename"`
+	TranscriptText         string         `gorm:"type:longtext" json:"transcript_text"`
+	PaperFilename          string         `gorm:"type:varchar(255)" json:"paper_filename"`
+	FinalDocumentFilename  string         `gorm:"type:varchar(255)" json:"final_document_filename"`
+	FinalDocumentUploadedAt *time.Time    `json:"final_document_uploaded_at"`
+	CreatedAt              time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt              time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 
 	Student       *Student          `gorm:"foreignKey:StudentID;constraint:OnDelete:CASCADE" json:"student,omitempty"`
 	FeedbackItems []FeedbackItem    `gorm:"foreignKey:ConsultationLogID;constraint:OnDelete:CASCADE" json:"feedback_items"`
@@ -128,6 +130,17 @@ type FeedbackItem struct {
 	Status            FeedbackStatus   `gorm:"type:enum('Fixed','Pending','Validated');not null;default:'Pending'" json:"status"`
 	CreatedAt         time.Time        `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt         time.Time        `gorm:"autoUpdateTime" json:"updated_at"`
+
+	Comments []FeedbackComment `gorm:"foreignKey:FeedbackItemID;constraint:OnDelete:CASCADE" json:"comments,omitempty"`
+}
+
+type FeedbackComment struct {
+	ID             uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
+	FeedbackItemID uint64    `gorm:"column:feedback_item_id;not null;index" json:"feedback_id"`
+	AuthorID       uint64    `gorm:"not null" json:"author_id"`
+	AuthorRole     string    `gorm:"type:varchar(20);not null" json:"author_role"` // "student" or "lecturer"
+	Content        string    `gorm:"type:text;not null" json:"content"`
+	CreatedAt      time.Time `gorm:"autoCreateTime" json:"created_at"`
 }
 
 // RevisionAnnotation stores annotated revision files uploaded by students (images of marked pages or docx with track changes)

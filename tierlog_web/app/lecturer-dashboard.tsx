@@ -191,6 +191,8 @@ export default function LecturerDashboardScreen() {
   const [feedbackError, setFeedbackError] = useState("");
   const [composerCategory, setComposerCategory] = useState<"Auto" | "Major" | "Minor">("Auto");
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [commentingOnFeedbackId, setCommentingOnFeedbackId] = useState<number | null>(null);
+  const [commentText, setCommentText] = useState("");
 
   const [validatingId, setValidatingId] = useState<number | null>(null);
 
@@ -301,6 +303,29 @@ export default function LecturerDashboardScreen() {
             const studentName = parentLog?.student?.name ?? "Student";
             showToast(`New Message from ${studentName}`, payload.data.content, "chat");
           }
+        }
+
+        if (payload.event === "feedback.comment") {
+          const newComment = payload.data;
+          setLogs((current) =>
+            current.map((log) =>
+              log.id !== newComment.log_id
+                ? log
+                : {
+                    ...log,
+                    feedback_items: (log.feedback_items ?? []).map((f) =>
+                      f.id === newComment.feedback_id
+                        ? {
+                            ...f,
+                            comments: (f.comments ?? []).some((c: any) => c.id === newComment.id)
+                              ? f.comments
+                              : [...(f.comments ?? []), newComment],
+                          }
+                        : f
+                    ),
+                  }
+            )
+          );
         }
       } catch (e) {
         console.error("[WS] parse error:", e);
@@ -461,6 +486,40 @@ export default function LecturerDashboardScreen() {
       setFeedbackError(e instanceof Error ? e.message : "Failed to add feedback.");
     } finally {
       setSubmittingFeedback(false);
+    }
+  };
+
+  const handleAddComment = async (feedbackId: number) => {
+    if (!commentText.trim()) return;
+    const content = commentText.trim();
+    setCommentText("");
+    setCommentingOnFeedbackId(null);
+
+    try {
+      await api(`/consultations/feedback/${feedbackId}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ content }),
+      });
+      // Comment will arrive via WebSocket broadcast "feedback.comment"
+    } catch {
+      // If API fails, add comment locally as fallback
+      const localComment = {
+        id: Date.now(),
+        feedback_id: feedbackId,
+        author_role: user?.role ?? "lecturer",
+        content,
+        created_at: new Date().toISOString(),
+      };
+      setLogs((current) =>
+        current.map((log) => ({
+          ...log,
+          feedback_items: (log.feedback_items ?? []).map((f) =>
+            f.id === feedbackId
+              ? { ...f, comments: [...(f.comments ?? []), localComment] }
+              : f
+          ),
+        }))
+      );
     }
   };
 
@@ -966,6 +1025,66 @@ export default function LecturerDashboardScreen() {
                                       )}
                                     </View>
                                     <Text className="text-slate-300 text-[13px] leading-5 font-medium">{item.content}</Text>
+
+                                    {/* Comments Thread */}
+                                    {item.comments && item.comments.length > 0 && (
+                                      <View className="mt-2 gap-2 border-t border-white/[0.04] pt-2">
+                                        <Text className="text-slate-400 text-[9px] font-black tracking-[1.5px]">COMMENTS</Text>
+                                        {item.comments.map((comment) => (
+                                          <View
+                                            key={comment.id}
+                                            className={`rounded-lg p-2.5 border ${
+                                              comment.author_role === "lecturer"
+                                                ? "bg-indigo-500/[0.06] border-indigo-500/[0.12] ml-4"
+                                                : "bg-white/[0.03] border-white/[0.06] mr-4"
+                                            }`}
+                                          >
+                                            <Text className="text-[9px] font-black tracking-[1px] text-slate-400 mb-1">
+                                              {comment.author_role === "lecturer" ? "ADVISOR" : "STUDENT"}
+                                            </Text>
+                                            <Text className="text-slate-200 text-[12px] leading-[18px] font-medium">{comment.content}</Text>
+                                          </View>
+                                        ))}
+                                      </View>
+                                    )}
+
+                                    {/* Add Comment Button */}
+                                    {commentingOnFeedbackId === item.id ? (
+                                      <View className="mt-2 gap-2 border-t border-white/[0.04] pt-2">
+                                        <TextInput
+                                          value={commentText}
+                                          onChangeText={setCommentText}
+                                          placeholder="Add a comment to this revision..."
+                                          placeholderTextColor="#475569"
+                                          multiline
+                                          className="bg-white/[0.02] border border-white/[0.06] rounded-lg text-slate-50 p-2.5 text-[12px] font-medium min-h-[60px]"
+                                          style={{ outlineStyle: "none", textAlignVertical: "top" } as any}
+                                        />
+                                        <View className="flex-row gap-2">
+                                          <Pressable
+                                            onPress={() => { setCommentingOnFeedbackId(null); setCommentText(""); }}
+                                            className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06]"
+                                          >
+                                            <Text className="text-slate-400 text-[11px] font-bold">Cancel</Text>
+                                          </Pressable>
+                                          <Pressable
+                                            onPress={() => void handleAddComment(item.id)}
+                                            disabled={!commentText.trim()}
+                                            className="px-3 py-1.5 rounded-lg bg-indigo-500/[0.12] border border-indigo-500/[0.25]"
+                                            style={{ opacity: commentText.trim() ? 1 : 0.5 }}
+                                          >
+                                            <Text className="text-indigo-400 text-[11px] font-bold">Post Comment</Text>
+                                          </Pressable>
+                                        </View>
+                                      </View>
+                                    ) : (
+                                      <Pressable
+                                        onPress={() => setCommentingOnFeedbackId(item.id)}
+                                        className="mt-2 self-start px-2.5 py-1 rounded-md bg-white/[0.03] border border-white/[0.06]"
+                                      >
+                                        <Text className="text-slate-400 text-[10px] font-bold">+ Add Comment</Text>
+                                      </Pressable>
+                                    )}
                                   </View>
                                 );
                               })}

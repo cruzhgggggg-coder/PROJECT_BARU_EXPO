@@ -33,12 +33,22 @@ func ConnectDatabase() {
 		panic("An error occurred while connecting to the database: " + err.Error())
 	}
 
+	// Clean up old self-referential feedback_items constraint to prevent duplicate key constraint name error during migration
+	migrator := database.Migrator()
+	if migrator.HasConstraint(&models.FeedbackItem{}, "fk_feedback_items_comments") {
+		_ = migrator.DropConstraint(&models.FeedbackItem{}, "fk_feedback_items_comments")
+	}
+	if migrator.HasColumn(&models.FeedbackItem{}, "parent_id") {
+		_ = migrator.DropColumn(&models.FeedbackItem{}, "parent_id")
+	}
+
 	if err := database.AutoMigrate(
 		&models.User{},
 		&models.Lecturer{},
 		&models.Student{},
 		&models.ConsultationLog{},
 		&models.FeedbackItem{},
+		&models.FeedbackComment{},
 		&models.RevisionAnnotation{},
 		&models.RedeemCode{},
 		&models.RefreshToken{},
@@ -49,7 +59,7 @@ func ConnectDatabase() {
 	}
 
 	// Clean up accidental consultation_log_id column and its foreign key constraints created by GORM prior to the mapping fix
-	migrator := database.Migrator()
+	migrator = database.Migrator()
 	if migrator.HasConstraint(&models.FeedbackItem{}, "feedback_items_consultation_log_id_foreign") {
 		_ = migrator.DropConstraint(&models.FeedbackItem{}, "feedback_items_consultation_log_id_foreign")
 	}

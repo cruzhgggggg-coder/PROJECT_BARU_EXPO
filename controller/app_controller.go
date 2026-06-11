@@ -509,7 +509,7 @@ func DashboardStatsV2(c *gin.Context) {
 
 func accessibleLog(user *models.User, logID uint64) (*models.ConsultationLog, error) {
 	var log models.ConsultationLog
-	query := koneksi.DB.Preload("FeedbackItems").Preload("Student").Preload("Student.User").Preload("Student.Lecturer")
+	query := koneksi.DB.Preload("FeedbackItems").Preload("FeedbackItems.Comments").Preload("Student").Preload("Student.User").Preload("Student.Lecturer")
 
 	switch user.Role {
 	case models.RoleStudent:
@@ -533,6 +533,7 @@ func ConsultationListV2(c *gin.Context) {
 	query := queryScopeForUser(
 		koneksi.DB.
 			Preload("FeedbackItems").
+			Preload("FeedbackItems.Comments").
 			Preload("RevisionAnnotations").
 			Preload("Student").
 			Preload("Student.User").
@@ -860,7 +861,7 @@ func LecturerConsultationsV2(c *gin.Context) {
 	}
 
 	var logs []models.ConsultationLog
-	if err := koneksi.DB.Preload("FeedbackItems").Preload("Student").Preload("Student.User").
+	if err := koneksi.DB.Preload("FeedbackItems").Preload("FeedbackItems.Comments").Preload("Student").Preload("Student.User").
 		Joins("JOIN students ON students.id = consultation_logs.student_id").
 		Where("students.lecturer_id = ?", user.Lecturer.ID).
 		Order("consultation_logs.created_at desc").
@@ -952,6 +953,118 @@ func LecturerAddFeedbackV2(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Feedback dispatched successfully", "data": feedback})
+}
+
+// AddFeedbackComment allows a student or lecturer to add a comment to a specific feedback item.
+func AddFeedbackComment(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	feedbackIDStr := c.Param("id")
+	feedbackID, err := strconv.ParseUint(feedbackIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid feedback ID"})
+		return
+	}
+
+	var req struct {
+		Content string `json:"content" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify the feedback item exists and the user has access
+	var feedback models.FeedbackItem
+	if err := koneksi.DB.First(&feedback, feedbackID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Feedback item not found"})
+		return
+	}
+
+	// Verify access via the parent consultation log
+	if _, err := accessibleLog(user, feedback.ConsultationLogID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
+
+	authorRole := string(user.Role)
+	comment := models.FeedbackComment{
+		FeedbackItemID: feedbackID,
+		AuthorID:       user.ID,
+		AuthorRole:     authorRole,
+		Content:        req.Content,
+	}
+
+	if err := koneksi.DB.Create(&comment).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Broadcast to real-time subscribers
+	if WebSocketHub != nil {
+		WebSocketHub.Broadcast("consultation."+strconv.FormatUint(feedback.ConsultationLogID, 10), "feedback.comment", gin.H{
+			"id":              comment.ID,
+			"feedback_id":     comment.FeedbackItemID,
+			"log_id":          feedback.ConsultationLogID,
+			"author_id":       comment.AuthorID,
+			"author_role":     comment.AuthorRole,
+			"content":         comment.Content,
+			"created_at":      comment.CreatedAt,
+		})
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"data": comment})
+}
+
+// UploadFinalDocument allows a student to upload the final approved document for a consultation log.
+func UploadFinalDocument(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if user.Role != models.RoleStudent || user.Student == nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only students can upload final documents"})
+		return
+	}
+
+	logIDStr := c.Param("id")
+	logID, err := strconv.ParseUint(logIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid log ID"})
+		return
+	}
+
+	// Verify the log belongs to this student
+	log, err := accessibleLog(user, logID)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or consultation log not found"})
+		return
+	}
+
+	file, err := c.FormFile("final_document")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
+		return
+	}
+
+	// Save file
+	filename := fmt.Sprintf("final_%d_%s", logID, file.Filename)
+	savePath := filepath.Join("storage", "final", filename)
+	if err := c.SaveUploadedFile(file, savePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+		return
+	}
+
+	// Update the consultation log record
+	now := time.Now()
+	if err := koneksi.DB.Model(log).Updates(map[string]interface{}{
+		"final_document_filename":   filename,
+		"final_document_uploaded_at": now,
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	log.FinalDocumentFilename = filename
+	log.FinalDocumentUploadedAt = &now
+
+	c.JSON(http.StatusOK, gin.H{"message": "Final document uploaded successfully", "data": log})
 }
 
 // GetDirectMessages fetches all direct messages for a given consultation log ID.

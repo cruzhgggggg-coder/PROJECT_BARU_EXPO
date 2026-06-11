@@ -203,8 +203,8 @@ export default function DashboardScreen() {
             <View className="gap-3.5">
               {stats?.upcoming_quests?.length ? (
                 stats.upcoming_quests.map((item) => {
-                  const isValidated = item.status.toLowerCase().includes("validated");
-                  const isFixed = item.status.toLowerCase().includes("fixed");
+                  const isValidated = item.status === "Validated";
+                  const isFixed = item.status === "Fixed";
 
                   return (
                     <motion.div key={item.id} variants={staggerItem}>

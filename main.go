@@ -19,6 +19,7 @@ func init() {
 		"storage/transcript",
 		"storage/paper",
 		"storage/annotations",
+		"storage/final",
 	}
 
 	for _, folder := range folders {
@@ -93,7 +94,9 @@ func main() {
 		protected.POST("/consultations", controller.CreateConsultationV2)
 		protected.POST("/consultations/chat", controller.ConsultationChatV2)
 		protected.PUT("/consultations/feedback/:id/status", controller.UpdateFeedbackStatusV2)
+		protected.POST("/consultations/feedback/:id/comments", controller.AddFeedbackComment)
 		protected.POST("/consultations/:id/add-feedback", controller.LecturerAddFeedbackV2)
+		protected.POST("/consultations/:id/final-document", controller.UploadFinalDocument)
 		protected.GET("/consultations/:id/direct-messages", controller.GetDirectMessages)
 		protected.POST("/consultations/:id/direct-messages", controller.SendDirectMessage)
 		protected.GET("/consultations/:id/ai-chats", controller.GetAIChats)

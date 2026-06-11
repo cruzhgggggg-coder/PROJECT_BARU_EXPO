@@ -44,6 +44,17 @@ export type FeedbackItem = {
   content: string;
   category: "Major" | "Minor";
   status: "Pending" | "Fixed" | "Validated";
+  comments?: FeedbackComment[];
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type FeedbackComment = {
+  id: number;
+  feedback_id: number;
+  author_role: "student" | "lecturer";
+  content: string;
+  created_at: string;
 };
 
 export type RevisionAnnotation = {
@@ -62,6 +73,8 @@ export type ConsultationLog = {
   transcript_filename: string;
   transcript_text: string;
   paper_filename: string;
+  final_document_filename?: string;
+  final_document_uploaded_at?: string;
   created_at: string;
   feedback_items: FeedbackItem[];
   revision_annotations?: RevisionAnnotation[];

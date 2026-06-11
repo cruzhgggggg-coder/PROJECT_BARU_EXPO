@@ -160,6 +160,8 @@ export default function ConsultationsScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0.24);
   const [audioTime, setAudioTime] = useState("02:14");
+  const [commentingOnFeedbackId, setCommentingOnFeedbackId] = useState<number | null>(null);
+  const [commentText, setCommentText] = useState("");
 
   const getMeetingNumber = (logId: number, studentId: number) => {
     const studentLogs = logs
@@ -322,6 +324,29 @@ export default function ConsultationsScreen() {
             showToast("New Message from Advisor", payload.data.content, "chat");
           }
         }
+
+        if (payload.event === "feedback.comment") {
+          const newComment = payload.data;
+          setLogs((current) =>
+            current.map((log) =>
+              log.id !== newComment.log_id
+                ? log
+                : {
+                    ...log,
+                    feedback_items: (log.feedback_items ?? []).map((f) =>
+                      f.id === newComment.feedback_id
+                        ? {
+                            ...f,
+                            comments: (f.comments ?? []).some((c: any) => c.id === newComment.id)
+                              ? f.comments
+                              : [...(f.comments ?? []), newComment],
+                          }
+                        : f
+                    ),
+                  }
+            )
+          );
+        }
       } catch (e) {
         console.error("[WS] parse error:", e);
       }
@@ -478,6 +503,40 @@ export default function ConsultationsScreen() {
     }
   };
 
+  const handleAddComment = async (feedbackId: number) => {
+    if (!commentText.trim()) return;
+    const content = commentText.trim();
+    setCommentText("");
+    setCommentingOnFeedbackId(null);
+
+    try {
+      await api(`/consultations/feedback/${feedbackId}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ content }),
+      });
+      // Comment will arrive via WebSocket broadcast "feedback.comment"
+    } catch {
+      // If API fails, add comment locally as fallback
+      const localComment = {
+        id: Date.now(),
+        feedback_id: feedbackId,
+        author_role: user?.role ?? "student",
+        content,
+        created_at: new Date().toISOString(),
+      };
+      setLogs((current) =>
+        current.map((log) => ({
+          ...log,
+          feedback_items: (log.feedback_items ?? []).map((f) =>
+            f.id === feedbackId
+              ? { ...f, comments: [...(f.comments ?? []), localComment] }
+              : f
+          ),
+        }))
+      );
+    }
+  };
+
   const triggerTranscription = () => {
     setIsTranscribing(true);
     setTimeout(() => {
@@ -582,6 +641,58 @@ export default function ConsultationsScreen() {
                       files={annotationFiles}
                       onFilesChange={setAnnotationFiles}
                     />
+
+                    {/* Final Document Upload Section */}
+                    <View className="mt-2 bg-emerald-500/[0.04] border border-emerald-500/[0.15] rounded-2xl p-4 gap-2.5">
+                      <View className="flex-row items-center gap-2">
+                        <Text className="text-[10px] font-black tracking-[1.5px] text-emerald-500">FINAL DOCUMENT</Text>
+                        {selected?.final_document_filename && (
+                          <Badge text="UPLOADED" color="#059669" />
+                        )}
+                      </View>
+                      <Text className="text-slate-400 text-[11px] font-medium leading-[16px]">
+                        Upload the final approved version of your document after all revisions are validated.
+                      </Text>
+                      <WebFileInput
+                        label="Select Final Document (.docx)"
+                        accept=".docx"
+                        onFileSelect={async (file) => {
+                          if (!file || !selected) return;
+                          try {
+                            const body = new FormData();
+                            body.append("final_document", file);
+                            await api(`/consultations/${selected.id}/final-document`, {
+                              method: "POST",
+                              body,
+                              headers: {},
+                            });
+                            await loadLogs();
+                            showToast("Final Document Uploaded", "Your final document has been uploaded successfully.", "system");
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Failed to upload final document");
+                          }
+                        }}
+                      />
+                      {selected?.final_document_filename && (
+                        <View className="flex-row items-center justify-between bg-emerald-500/[0.06] rounded-xl px-3 py-2 border border-emerald-500/[0.12]">
+                          <View className="flex-1">
+                            <Text className="text-emerald-500 text-[11px] font-bold" numberOfLines={1}>{selected.final_document_filename}</Text>
+                            {selected.final_document_uploaded_at && (
+                              <Text className="text-slate-400 text-[10px] mt-0.5">
+                                Uploaded: {new Date(selected.final_document_uploaded_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
+                              </Text>
+                            )}
+                          </View>
+                          <Pressable
+                            onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/final/${selected!.final_document_filename}`)}
+                            className="px-2.5 py-1 rounded-md border border-emerald-500/[0.15] bg-emerald-500/[0.08]"
+                            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+                          >
+                            <Text className="text-emerald-500 text-[10px] font-bold">Download</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
                   </ScrollView>
 
                   <View className="mt-2 mb-4">
@@ -784,16 +895,23 @@ export default function ConsultationsScreen() {
                                 <Badge text={item.category.toUpperCase()} color={item.category === "Major" ? "#DC2626" : "#4F46E5"} />
 
                                 <Pressable
-                                  onPress={() => void updateStatus(item, isFixed ? "Pending" : "Fixed")}
-                                  disabled={isValidated}
+                                  onPress={() => {
+                                    if (isFixed) return;
+                                    if (isValidated) return;
+                                    const confirmed = window.confirm("Are you sure you want to mark this revision as completed? This action cannot be undone.");
+                                    if (confirmed) {
+                                      void updateStatus(item, "Fixed");
+                                    }
+                                  }}
+                                  disabled={isFixed || isValidated}
                                   className="flex-row items-center gap-1.5 px-2.5 py-1 rounded-md"
                                   style={({ pressed }) => ({
                                     gap: 6,
                                     backgroundColor: isFixed ? "rgba(5, 150, 105, 0.06)" : isValidated ? "rgba(79, 70, 229, 0.06)" : "rgba(217, 119, 6, 0.06)",
                                     borderWidth: 1,
                                     borderColor: isFixed ? "rgba(5, 150, 105, 0.15)" : isValidated ? "rgba(79, 70, 229, 0.15)" : "rgba(217, 119, 6, 0.15)",
-                                    transform: [{ scale: pressed && !isValidated ? 0.96 : 1 }],
-                                    opacity: isValidated ? 0.8 : 1,
+                                    transform: [{ scale: pressed && !isFixed && !isValidated ? 0.96 : 1 }],
+                                    opacity: isFixed || isValidated ? 0.8 : 1,
                                   })}
                                 >
                                   <View
@@ -829,6 +947,66 @@ export default function ConsultationsScreen() {
                                   <Text className="text-[11px] font-extrabold text-violet-600">Quick AI Revision</Text>
                                 </Pressable>
                               </View>
+
+                              {/* Comments Thread */}
+                              {item.comments && item.comments.length > 0 && (
+                                <View className="mt-2 gap-2 border-t border-white/[0.04] pt-2">
+                                  <Text className="text-slate-400 text-[9px] font-black tracking-[1.5px]">COMMENTS</Text>
+                                  {item.comments.map((comment) => (
+                                    <View
+                                      key={comment.id}
+                                      className={`rounded-lg p-2.5 border ${
+                                        comment.author_role === "student"
+                                          ? "bg-indigo-500/[0.06] border-indigo-500/[0.12] ml-4"
+                                          : "bg-white/[0.03] border-white/[0.06] mr-4"
+                                      }`}
+                                    >
+                                      <Text className="text-[9px] font-black tracking-[1px] text-slate-400 mb-1">
+                                        {comment.author_role === "student" ? "YOU" : "ADVISOR"}
+                                      </Text>
+                                      <Text className="text-slate-200 text-[12px] leading-[18px] font-medium">{comment.content}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              )}
+
+                              {/* Add Comment Button */}
+                              {commentingOnFeedbackId === item.id ? (
+                                <View className="mt-2 gap-2 border-t border-white/[0.04] pt-2">
+                                  <TextInput
+                                    value={commentText}
+                                    onChangeText={setCommentText}
+                                    placeholder="Add a comment or response..."
+                                    placeholderTextColor="#475569"
+                                    multiline
+                                    className="bg-white/[0.02] border border-white/[0.06] rounded-lg text-slate-50 p-2.5 text-[12px] font-medium min-h-[60px]"
+                                    style={{ outlineStyle: "none", textAlignVertical: "top" } as any}
+                                  />
+                                  <View className="flex-row gap-2">
+                                    <Pressable
+                                      onPress={() => { setCommentingOnFeedbackId(null); setCommentText(""); }}
+                                      className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06]"
+                                    >
+                                      <Text className="text-slate-400 text-[11px] font-bold">Cancel</Text>
+                                    </Pressable>
+                                    <Pressable
+                                      onPress={() => void handleAddComment(item.id)}
+                                      disabled={!commentText.trim()}
+                                      className="px-3 py-1.5 rounded-lg bg-indigo-500/[0.12] border border-indigo-500/[0.25]"
+                                      style={{ opacity: commentText.trim() ? 1 : 0.5 }}
+                                    >
+                                      <Text className="text-indigo-400 text-[11px] font-bold">Post Comment</Text>
+                                    </Pressable>
+                                  </View>
+                                </View>
+                              ) : (
+                                <Pressable
+                                  onPress={() => setCommentingOnFeedbackId(item.id)}
+                                  className="mt-2 self-start px-2.5 py-1 rounded-md bg-white/[0.03] border border-white/[0.06]"
+                                >
+                                  <Text className="text-slate-400 text-[10px] font-bold">+ Add Comment</Text>
+                                </Pressable>
+                              )}
                             </View>
                           );
                         })}
