@@ -20,6 +20,7 @@ func init() {
 		"storage/paper",
 		"storage/annotations",
 		"storage/final",
+		"storage/revised",
 	}
 
 	for _, folder := range folders {
@@ -63,7 +64,12 @@ func main() {
 	loadEnv()
 	koneksi.ConnectDatabase()
 
-	gin.SetMode(gin.ReleaseMode)
+	ginMode := os.Getenv("GIN_MODE")
+	if ginMode == "" {
+		ginMode = gin.DebugMode
+	}
+	gin.SetMode(ginMode)
+
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
 	r.Use(corsMiddleware())
@@ -79,6 +85,7 @@ func main() {
 	r.POST("/auth/login", controller.Login)
 	r.POST("/auth/refresh", controller.Refresh)
 	r.POST("/auth/logout", controller.Logout)
+	r.GET("/auth/lecturers", controller.GetLecturers)
 
 	protected := r.Group("/")
 	protected.Use(middleware.AuthRequired())
@@ -97,6 +104,7 @@ func main() {
 		protected.POST("/consultations/feedback/:id/comments", controller.AddFeedbackComment)
 		protected.POST("/consultations/:id/add-feedback", controller.LecturerAddFeedbackV2)
 		protected.POST("/consultations/:id/final-document", controller.UploadFinalDocument)
+		protected.POST("/consultations/:id/revised-document", controller.UploadRevisedDocument)
 		protected.GET("/consultations/:id/direct-messages", controller.GetDirectMessages)
 		protected.POST("/consultations/:id/direct-messages", controller.SendDirectMessage)
 		protected.GET("/consultations/:id/ai-chats", controller.GetAIChats)

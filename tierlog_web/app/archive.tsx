@@ -77,15 +77,27 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
         {/* Expanded content */}
         {expanded && (
           <View className="gap-4 pt-2 border-t border-white/[0.06]">
-            {/* Download link */}
-            <Pressable
-              onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${log.paper_filename}`)}
-              style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-            >
-              <Text className="text-[11px] font-bold text-[#3B82F6] underline">
-                Download Draft Document
-              </Text>
-            </Pressable>
+            {/* Download links */}
+            <View className="flex-row gap-3 flex-wrap">
+              <Pressable
+                onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
+                style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text className="text-[11px] font-bold text-[#3B82F6] underline">
+                  Download Draft
+                </Text>
+              </Pressable>
+              {log.revised_document_filename && (
+                <Pressable
+                  onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/revised/${encodeURIComponent(log.revised_document_filename)}`)}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <Text className="text-[11px] font-bold text-[#7C3AED] underline">
+                    Download Revised Draft
+                  </Text>
+                </Pressable>
+              )}
+            </View>
 
             {/* Tab switcher */}
             <View className="flex-row gap-2 border-b border-white/[0.08] pb-2">
@@ -136,20 +148,30 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
                   <View className="bg-white/[0.02] p-3 rounded-xl border border-white/[0.06]">
                     <View className="gap-2">
                       {log.feedback_items.map((item) => (
-                        <View key={item.id} className="flex-row justify-between items-center gap-2.5 border-b border-white/[0.04] pb-1.5">
-                          <View className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.status === "Validated" ? "#0F766E" : item.status === "Fixed" ? "#3B82F6" : "#D97706" }} />
-                          <View className="flex-1">
-                            <Text className="text-[13px] font-medium text-[#CBD5E1]" numberOfLines={2}>
-                              {item.content}
-                            </Text>
-                            <View className="flex-row gap-1.5 mt-1 items-center">
-                              <Badge text={item.category} color={item.category === "Major" ? "#DC2626" : "#3B82F6"} />
-                              <Badge
-                                text={item.status === "Validated" ? "APPROVED" : item.status === "Fixed" ? "RESOLVED" : "PENDING"}
-                                color={item.status === "Validated" ? "#0F766E" : item.status === "Fixed" ? "#3B82F6" : "#D97706"}
-                              />
+                        <View key={item.id} className="gap-1.5 border-b border-white/[0.04] pb-2">
+                          <View className="flex-row justify-between items-center gap-2.5">
+                            <View className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.status === "Validated" ? "#0F766E" : item.status === "Fixed" ? "#3B82F6" : "#D97706" }} />
+                            <View className="flex-1">
+                              <Text className="text-[13px] font-medium text-[#CBD5E1]" numberOfLines={2}>
+                                {item.content}
+                              </Text>
+                              <View className="flex-row gap-1.5 mt-1 items-center">
+                                <Badge text={item.category} color={item.category === "Major" ? "#DC2626" : "#3B82F6"} />
+                                <Badge
+                                  text={item.status === "Validated" ? "APPROVED" : item.status === "Fixed" ? "RESOLVED" : "PENDING"}
+                                  color={item.status === "Validated" ? "#0F766E" : item.status === "Fixed" ? "#3B82F6" : "#D97706"}
+                                />
+                              </View>
                             </View>
                           </View>
+                          {item.fix_proof_text ? (
+                            <View className="ml-4 bg-emerald-500/[0.04] border border-emerald-500/[0.12] rounded-lg p-2 gap-1">
+                              <Text className="text-emerald-500 text-[8px] font-black tracking-[1.5px]">FIX DESCRIPTION</Text>
+                              <Text className="text-[#CBD5E1] text-[11px] font-medium" style={{ lineHeight: 16 }}>
+                                {item.fix_proof_text}
+                              </Text>
+                            </View>
+                          ) : null}
                         </View>
                       ))}
                     </View>

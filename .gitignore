@@ -53,11 +53,17 @@ storage/transcript/*
 storage/feedback/*
 storage/paper/*
 storage/annotations/*
+storage/revised/*
+storage/fixes/*
+storage/final/*
 !storage/audio/.gitkeep
 !storage/transcript/.gitkeep
 !storage/feedback/.gitkeep
 !storage/paper/.gitkeep
 !storage/annotations/.gitkeep
+!storage/revised/.gitkeep
+!storage/fixes/.gitkeep
+!storage/final/.gitkeep
 
 # ─── Scratch/Temporary ──────────────────────────────────────
 scratch/

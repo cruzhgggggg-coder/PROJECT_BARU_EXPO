@@ -9,6 +9,7 @@ import (
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var DB *gorm.DB
@@ -28,7 +29,17 @@ func ConnectDatabase() {
 	dbname := envOrDefault("DB_DATABASE", "struct_go")
 
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", user, password, host, port, dbname)
-	database, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	
+	var gormConfig gorm.Config
+	if os.Getenv("GIN_MODE") != "release" {
+		gormConfig = gorm.Config{
+			Logger: logger.Default.LogMode(logger.Info),
+		}
+	} else {
+		gormConfig = gorm.Config{}
+	}
+
+	database, err := gorm.Open(mysql.Open(dsn), &gormConfig)
 	if err != nil {
 		panic("An error occurred while connecting to the database: " + err.Error())
 	}

@@ -163,6 +163,14 @@ export default function ConsultationsScreen() {
   const [commentingOnFeedbackId, setCommentingOnFeedbackId] = useState<number | null>(null);
   const [commentText, setCommentText] = useState("");
 
+  // Revised draft upload state
+  const [revisedFile, setRevisedFile] = useState<File | null>(null);
+  const [uploadingRevised, setUploadingRevised] = useState(false);
+
+  // Fix proof text state
+  const [fixingFeedbackId, setFixingFeedbackId] = useState<number | null>(null);
+  const [fixProofText, setFixProofText] = useState("");
+
   const getMeetingNumber = (logId: number, studentId: number) => {
     const studentLogs = logs
       .filter((l) => l.student_id === studentId)
@@ -488,15 +496,15 @@ export default function ConsultationsScreen() {
     }
   };
 
-  const updateStatus = async (item: FeedbackItem, status: FeedbackItem["status"]) => {
+  const updateStatus = async (item: FeedbackItem, status: FeedbackItem["status"], proofText?: string) => {
     try {
       await api(`/consultations/feedback/${item.id}/status`, {
         method: "PUT",
-        body: JSON.stringify({ status, log_id: selected?.id }),
+        body: JSON.stringify({ status, log_id: selected?.id, fix_proof_text: proofText || "" }),
       });
       await loadLogs();
       if (selectedFeedbackItem && selectedFeedbackItem.id === item.id) {
-        setSelectedFeedbackItem(prev => prev ? { ...prev, status } : null);
+        setSelectedFeedbackItem(prev => prev ? { ...prev, status, fix_proof_text: proofText || prev.fix_proof_text } : null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Status update failed");
@@ -551,6 +559,28 @@ export default function ConsultationsScreen() {
       setIsAnalyzing(false);
       alert("Feedback metrics and version consistency analysis have been updated.");
     }, 2000);
+  };
+
+  const uploadRevisedDocument = async () => {
+    if (!revisedFile || !selected) return;
+    setUploadingRevised(true);
+    setError("");
+    try {
+      const body = new FormData();
+      body.append("revised_document", revisedFile);
+      await api(`/consultations/${selected.id}/revised-document`, {
+        method: "POST",
+        body,
+        headers: {},
+      });
+      setRevisedFile(null);
+      await loadLogs();
+      showToast("Revised Draft Uploaded", "Your revised document has been uploaded successfully.", "system");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload revised document");
+    } finally {
+      setUploadingRevised(false);
+    }
   };
 
   const togglePlayback = () => {
@@ -684,11 +714,67 @@ export default function ConsultationsScreen() {
                             )}
                           </View>
                           <Pressable
-                            onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/final/${selected!.final_document_filename}`)}
+                            onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/final/${encodeURIComponent(selected!.final_document_filename!)}`)}
                             className="px-2.5 py-1 rounded-md border border-emerald-500/[0.15] bg-emerald-500/[0.08]"
                             style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                           >
                             <Text className="text-emerald-500 text-[10px] font-bold">Download</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Revised Draft Upload Section */}
+                    <View className="mt-2 bg-violet-500/[0.04] border border-violet-500/[0.15] rounded-2xl p-4 gap-2.5">
+                      <View className="flex-row items-center gap-2">
+                        <Text className="text-[10px] font-black tracking-[1.5px] text-violet-500">REVISED DRAFT</Text>
+                        {selected?.revised_document_filename && (
+                          <Badge text="UPLOADED" color="#7C3AED" />
+                        )}
+                      </View>
+                      <Text className="text-slate-400 text-[11px] font-medium leading-[16px]">
+                        Upload your revised document for this session. This replaces the previous draft.
+                      </Text>
+                      <WebFileInput
+                        label="Select Revised Draft (.docx)"
+                        accept=".docx"
+                        onFileSelect={setRevisedFile}
+                      />
+                      {revisedFile && (
+                        <View className="flex-row items-center justify-between bg-violet-500/[0.06] rounded-xl px-3 py-2 border border-violet-500/[0.12]">
+                          <Text className="text-violet-400 text-[11px] font-bold flex-1" numberOfLines={1}>{revisedFile.name}</Text>
+                          <Pressable
+                            onPress={() => setRevisedFile(null)}
+                            className="px-2 py-1 rounded-md bg-white/[0.04] border border-white/[0.06]"
+                          >
+                            <Text className="text-slate-400 text-[10px] font-bold">Remove</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                      {revisedFile && (
+                        <Button
+                          title={uploadingRevised ? "Uploading..." : "Upload Revised Draft"}
+                          onPress={() => void uploadRevisedDocument()}
+                          disabled={uploadingRevised}
+                          tone="secondary"
+                        />
+                      )}
+                      {selected?.revised_document_filename && (
+                        <View className="flex-row items-center justify-between bg-violet-500/[0.06] rounded-xl px-3 py-2 border border-violet-500/[0.12]">
+                          <View className="flex-1">
+                            <Text className="text-violet-400 text-[11px] font-bold" numberOfLines={1}>{selected.revised_document_filename}</Text>
+                            {selected.revised_document_uploaded_at && (
+                              <Text className="text-slate-400 text-[10px] mt-0.5">
+                                Uploaded: {new Date(selected.revised_document_uploaded_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
+                              </Text>
+                            )}
+                          </View>
+                          <Pressable
+                            onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/revised/${encodeURIComponent(selected!.revised_document_filename!)}`)}
+                            className="px-2.5 py-1 rounded-md border border-violet-500/[0.15] bg-violet-500/[0.08]"
+                            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+                          >
+                            <Text className="text-violet-500 text-[10px] font-bold">Download</Text>
                           </Pressable>
                         </View>
                       )}
@@ -785,7 +871,7 @@ export default function ConsultationsScreen() {
                       <Text className="text-lg font-black tracking-tight text-slate-50">Advisory Workspace</Text>
                       {selected && (
                         <Pressable
-                          onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${selected.paper_filename}`)}
+                          onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${encodeURIComponent(selected.paper_filename)}`)}
                           className="flex-row items-center gap-1 w-full"
                           style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                         >
@@ -894,45 +980,82 @@ export default function ConsultationsScreen() {
                               <View className="flex-row justify-between items-center">
                                 <Badge text={item.category.toUpperCase()} color={item.category === "Major" ? "#DC2626" : "#4F46E5"} />
 
-                                <Pressable
-                                  onPress={() => {
-                                    if (isFixed) return;
-                                    if (isValidated) return;
-                                    const confirmed = window.confirm("Are you sure you want to mark this revision as completed? This action cannot be undone.");
-                                    if (confirmed) {
-                                      void updateStatus(item, "Fixed");
-                                    }
-                                  }}
-                                  disabled={isFixed || isValidated}
-                                  className="flex-row items-center gap-1.5 px-2.5 py-1 rounded-md"
-                                  style={({ pressed }) => ({
-                                    gap: 6,
-                                    backgroundColor: isFixed ? "rgba(5, 150, 105, 0.06)" : isValidated ? "rgba(79, 70, 229, 0.06)" : "rgba(217, 119, 6, 0.06)",
-                                    borderWidth: 1,
-                                    borderColor: isFixed ? "rgba(5, 150, 105, 0.15)" : isValidated ? "rgba(79, 70, 229, 0.15)" : "rgba(217, 119, 6, 0.15)",
-                                    transform: [{ scale: pressed && !isFixed && !isValidated ? 0.96 : 1 }],
-                                    opacity: isFixed || isValidated ? 0.8 : 1,
-                                  })}
-                                >
-                                  <View
-                                    className="w-2.5 h-2.5 rounded-[3px] justify-center items-center"
-                                    style={{
-                                      borderWidth: 1,
-                                      borderColor: isFixed ? "#059669" : isValidated ? "#4F46E5" : "#D97706",
-                                      backgroundColor: isFixed ? "#059669" : "transparent",
-                                    }}
-                                  >
-                                    {isFixed && <Text className="text-white text-[6px] font-black">&#10003;</Text>}
+                                {fixingFeedbackId === item.id ? (
+                                  <View className="flex-row items-center gap-2">
+                                    <TextInput
+                                      value={fixProofText}
+                                      onChangeText={setFixProofText}
+                                      placeholder="Describe your fix..."
+                                      placeholderTextColor="#475569"
+                                      className="bg-white/[0.02] border border-white/[0.06] rounded-lg text-slate-50 px-2.5 py-1.5 text-[11px] font-medium w-[180px]"
+                                      style={{ outlineStyle: "none" } as any}
+                                    />
+                                    <Pressable
+                                      onPress={() => {
+                                        void updateStatus(item, "Fixed", fixProofText);
+                                        setFixingFeedbackId(null);
+                                        setFixProofText("");
+                                      }}
+                                      className="px-2.5 py-1 rounded-md bg-emerald-500/[0.12] border border-emerald-500/[0.25]"
+                                    >
+                                      <Text className="text-emerald-500 text-[10px] font-bold">Confirm</Text>
+                                    </Pressable>
+                                    <Pressable
+                                      onPress={() => { setFixingFeedbackId(null); setFixProofText(""); }}
+                                      className="px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/[0.06]"
+                                    >
+                                      <Text className="text-slate-400 text-[10px] font-bold">Cancel</Text>
+                                    </Pressable>
                                   </View>
-                                  <Text className="text-[9px] font-black" style={{ color: isFixed ? "#059669" : isValidated ? "#4F46E5" : "#D97706" }}>
-                                    {item.status.toUpperCase()}
-                                  </Text>
-                                </Pressable>
+                                ) : (
+                                  <Pressable
+                                    onPress={() => {
+                                      if (isFixed) return;
+                                      if (isValidated) return;
+                                      setFixingFeedbackId(item.id);
+                                      setFixProofText("");
+                                    }}
+                                    disabled={isFixed || isValidated}
+                                    className="flex-row items-center gap-1.5 px-2.5 py-1 rounded-md"
+                                    style={({ pressed }) => ({
+                                      gap: 6,
+                                      backgroundColor: isFixed ? "rgba(5, 150, 105, 0.06)" : isValidated ? "rgba(79, 70, 229, 0.06)" : "rgba(217, 119, 6, 0.06)",
+                                      borderWidth: 1,
+                                      borderColor: isFixed ? "rgba(5, 150, 105, 0.15)" : isValidated ? "rgba(79, 70, 229, 0.15)" : "rgba(217, 119, 6, 0.15)",
+                                      transform: [{ scale: pressed && !isFixed && !isValidated ? 0.96 : 1 }],
+                                      opacity: isFixed || isValidated ? 0.8 : 1,
+                                    })}
+                                  >
+                                    <View
+                                      className="w-2.5 h-2.5 rounded-[3px] justify-center items-center"
+                                      style={{
+                                        borderWidth: 1,
+                                        borderColor: isFixed ? "#059669" : isValidated ? "#4F46E5" : "#D97706",
+                                        backgroundColor: isFixed ? "#059669" : "transparent",
+                                      }}
+                                    >
+                                      {isFixed && <Text className="text-white text-[6px] font-black">&#10003;</Text>}
+                                    </View>
+                                    <Text className="text-[9px] font-black" style={{ color: isFixed ? "#059669" : isValidated ? "#4F46E5" : "#D97706" }}>
+                                      {item.status.toUpperCase()}
+                                    </Text>
+                                  </Pressable>
+                                )}
                               </View>
 
                               <Text className="text-[13.5px] font-medium text-slate-200" style={{ lineHeight: 20 }}>
                                 {item.content}
                               </Text>
+
+                              {/* Fix Proof Text Display */}
+                              {item.fix_proof_text ? (
+                                <View className="mt-1.5 bg-emerald-500/[0.04] border border-emerald-500/[0.12] rounded-lg p-2.5 gap-1">
+                                  <Text className="text-emerald-500 text-[9px] font-black tracking-[1.5px]">FIX DESCRIPTION</Text>
+                                  <Text className="text-slate-300 text-[12px] font-medium" style={{ lineHeight: 18 }}>
+                                    {item.fix_proof_text}
+                                  </Text>
+                                </View>
+                              ) : null}
 
                               <View className="flex-row gap-2 flex-wrap mt-1 justify-end">
                                 <Pressable
@@ -1051,7 +1174,7 @@ export default function ConsultationsScreen() {
                                   </Text>
                                 </View>
                                 <Pressable
-                                  onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/annotations/${ann.filename}`)}
+                                  onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/annotations/${encodeURIComponent(ann.filename)}`)}
                                   className="bg-violet-600/[0.08] px-2.5 py-1 rounded-md border border-violet-600/[0.15]"
                                   style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                                 >
@@ -1121,7 +1244,7 @@ export default function ConsultationsScreen() {
                                   </View>
                                   <View className="flex-row gap-2">
                                     <Pressable
-                                      onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${log.paper_filename}`)}
+                                      onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
                                       className="px-2.5 py-[5px] rounded-md border border-cyan-600/[0.15] bg-cyan-600/[0.08]"
                                       style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                                     >

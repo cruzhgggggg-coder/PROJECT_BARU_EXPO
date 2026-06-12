@@ -46,6 +46,13 @@ func decryptUserKeys(user *models.User) {
 	user.GroqKey, _ = auth.DecryptAES(user.GroqKey)
 }
 
+func maskKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	return "••••••••••••••••"
+}
+
 func sanitizeUser(user *models.User) gin.H {
 	// Decrypt API keys before returning in response
 	decrypted := *user
@@ -60,6 +67,11 @@ func sanitizeUser(user *models.User) gin.H {
 		"is_gateway_active": decrypted.IsGatewayActive,
 		"created_at":        decrypted.CreatedAt,
 		"updated_at":        decrypted.UpdatedAt,
+		"openai_key":        maskKey(decrypted.OpenAIKey),
+		"gemini_key":        maskKey(decrypted.GeminiKey),
+		"anthropic_key":     maskKey(decrypted.AnthropicKey),
+		"nvidia_key":        maskKey(decrypted.NvidiaKey),
+		"groq_key":          maskKey(decrypted.GroqKey),
 	}
 
 	if decrypted.Student != nil {
@@ -279,15 +291,16 @@ func UpdateProfile(c *gin.Context) {
 	user := middleware.CurrentUser(c)
 
 	var req struct {
-		Name        string `json:"name" binding:"required"`
-		Email       string `json:"email" binding:"required,email"`
-		NIM         string `json:"nim"`
-		Prodi       string `json:"prodi"`
-		ThesisTitle string `json:"thesis_title"`
-		LecturerID  uint64 `json:"lecturer_id"`
-		NIP         string `json:"nip"`
-		Faculty     string `json:"faculty"`
-		Keahlian    string `json:"keahlian"`
+		Name          string `json:"name" binding:"required"`
+		Email         string `json:"email" binding:"required,email"`
+		NIM           string `json:"nim"`
+		Prodi         string `json:"prodi"`
+		ThesisTitle   string `json:"thesis_title"`
+		LecturerID    uint64 `json:"lecturer_id"`
+		NIP           string `json:"nip"`
+		Faculty       string `json:"faculty"`
+		Keahlian      string `json:"keahlian"`
+		AiConstraints string `json:"ai_constraints"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -334,6 +347,7 @@ func UpdateProfile(c *gin.Context) {
 		}
 		lecturer.Faculty = req.Faculty
 		lecturer.Keahlian = req.Keahlian
+		lecturer.AiConstraints = req.AiConstraints
 		if err := koneksi.DB.Save(&lecturer).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -393,11 +407,24 @@ func UpdateAIGatewaySettingsV2(c *gin.Context) {
 		return
 	}
 
-	user.OpenAIKey = req.OpenAIKey
-	user.GeminiKey = req.GeminiKey
-	user.AnthropicKey = req.AnthropicKey
-	user.NvidiaKey = req.NvidiaKey
-	user.GroqKey = req.GroqKey
+	// Decrypt existing keys so we have the plaintext versions
+	decryptUserKeys(user)
+
+	if req.OpenAIKey != "••••••••••••••••" {
+		user.OpenAIKey = req.OpenAIKey
+	}
+	if req.GeminiKey != "••••••••••••••••" {
+		user.GeminiKey = req.GeminiKey
+	}
+	if req.AnthropicKey != "••••••••••••••••" {
+		user.AnthropicKey = req.AnthropicKey
+	}
+	if req.NvidiaKey != "••••••••••••••••" {
+		user.NvidiaKey = req.NvidiaKey
+	}
+	if req.GroqKey != "••••••••••••••••" {
+		user.GroqKey = req.GroqKey
+	}
 	if req.PreferredModel != "" {
 		user.PreferredModel = req.PreferredModel
 	}
@@ -797,8 +824,9 @@ func UpdateFeedbackStatusV2(c *gin.Context) {
 	id := c.Param("id")
 
 	var req struct {
-		Status string `json:"status" binding:"required"`
-		LogID  uint64 `json:"log_id"`
+		Status       string `json:"status" binding:"required"`
+		LogID        uint64 `json:"log_id"`
+		FixProofText string `json:"fix_proof_text"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
@@ -833,6 +861,9 @@ func UpdateFeedbackStatusV2(c *gin.Context) {
 	}
 
 	feedback.Status = models.FeedbackStatus(req.Status)
+	if req.Status == string(models.StatusFixed) && req.FixProofText != "" {
+		feedback.FixProofText = req.FixProofText
+	}
 	if err := koneksi.DB.Save(&feedback).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -1065,6 +1096,58 @@ func UploadFinalDocument(c *gin.Context) {
 	log.FinalDocumentUploadedAt = &now
 
 	c.JSON(http.StatusOK, gin.H{"message": "Final document uploaded successfully", "data": log})
+}
+
+// UploadRevisedDocument allows a student to upload a revised draft document for a consultation session.
+func UploadRevisedDocument(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if user.Role != models.RoleStudent || user.Student == nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only students can upload revised documents"})
+		return
+	}
+
+	logIDStr := c.Param("id")
+	logID, err := strconv.ParseUint(logIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid log ID"})
+		return
+	}
+
+	// Verify the log belongs to this student
+	log, err := accessibleLog(user, logID)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or consultation log not found"})
+		return
+	}
+
+	file, err := c.FormFile("revised_document")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
+		return
+	}
+
+	// Save file
+	filename := fmt.Sprintf("revised_%d_%s", logID, file.Filename)
+	savePath := filepath.Join("storage", "revised", filename)
+	if err := c.SaveUploadedFile(file, savePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+		return
+	}
+
+	// Update the consultation log record
+	now := time.Now()
+	if err := koneksi.DB.Model(log).Updates(map[string]interface{}{
+		"revised_document_filename":    filename,
+		"revised_document_uploaded_at": now,
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	log.RevisedDocumentFilename = filename
+	log.RevisedDocumentUploadedAt = &now
+
+	c.JSON(http.StatusOK, gin.H{"message": "Revised document uploaded successfully", "data": log})
 }
 
 // GetDirectMessages fetches all direct messages for a given consultation log ID.

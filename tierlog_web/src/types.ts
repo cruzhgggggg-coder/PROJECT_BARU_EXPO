@@ -17,6 +17,7 @@ export type LecturerProfile = {
   name: string;
   faculty: string;
   keahlian: string;
+  ai_constraints?: string;
 };
 
 // TODO (SEC-01): API keys below should be masked/redacted by the backend before
@@ -44,6 +45,7 @@ export type FeedbackItem = {
   content: string;
   category: "Major" | "Minor";
   status: "Pending" | "Fixed" | "Validated";
+  fix_proof_text?: string;
   comments?: FeedbackComment[];
   created_at?: string;
   updated_at?: string;
@@ -75,6 +77,8 @@ export type ConsultationLog = {
   paper_filename: string;
   final_document_filename?: string;
   final_document_uploaded_at?: string;
+  revised_document_filename?: string;
+  revised_document_uploaded_at?: string;
   created_at: string;
   feedback_items: FeedbackItem[];
   revision_annotations?: RevisionAnnotation[];

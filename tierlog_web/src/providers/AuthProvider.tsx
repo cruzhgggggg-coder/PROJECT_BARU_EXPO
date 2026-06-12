@@ -140,6 +140,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const setUserAndPersist = useCallback((nextUser: React.SetStateAction<User | null>) => {
+    setUser((prev) => {
+      const resolved = typeof nextUser === "function" ? (nextUser as Function)(prev) : nextUser;
+      if (resolved) {
+        saveAuthSnapshot({ user: resolved, accessToken, refreshToken });
+      } else {
+        clearAuthSnapshot();
+      }
+      return resolved;
+    });
+  }, [accessToken, refreshToken]);
+
   useEffect(() => {
     const snapshot = loadAuthSnapshot();
     if (!snapshot) {
@@ -340,9 +352,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       refresh,
       api,
-      setUser,
+      setUser: setUserAndPersist,
     }),
-    [accessToken, api, booting, login, logout, refresh, refreshToken, register, user]
+    [accessToken, api, booting, login, logout, refresh, refreshToken, register, user, setUserAndPersist]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

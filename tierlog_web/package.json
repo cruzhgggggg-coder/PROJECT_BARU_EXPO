@@ -9,10 +9,15 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
     "clsx": "^2.1.1",
     "expo": "~53.0.0",
     "expo-constants": "~17.1.8",
-    "expo-linking": "~7.1.7",
+    "expo-document-picker": "~14.0.8",
+    "expo-haptics": "~15.0.8",
+    "expo-image-manipulator": "~14.0.8",
+    "expo-image-picker": "~17.0.11",
+    "expo-linking": "~8.0.12",
     "expo-router": "~5.1.11",
     "expo-status-bar": "~2.2.0",
     "framer-motion": "^12.40.0",

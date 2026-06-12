@@ -37,7 +37,7 @@ PRINSIP UTAMA:
 
 KATEGORI FEEDBACK:
 - HOC (Higher Order Concerns): Fokus pada substansi seperti struktur, argumen, metodologi, dan kesesuaian judul.
-- LOC (Lower Order Concerns): Fokus pada teknis seperti penulisan, typo, format sitasi, dan tata bahasa.
+- LOC (Lower Order Concerns): Fokus pada teknis seperti penulisan, typo, format sitasi, tata bahasa, serta aspek administratif/prosedural (misal: tanda tangan, pengumpulan berkas, form pendaftaran, dll).
 
 TATA CARA OUTPUT:
 Kamu WAJIB mengembalikan output dalam format JSON dengan struktur:
@@ -896,6 +896,14 @@ func AnalyzeAudioAndPaper(userID uint64, audioPath, paperText, prevFeedback stri
 
 	// 2. Analyze the Transcript and Paper with AI
 	systemPrompt := personaDosenPrompt
+
+	// Append custom AI constraints from lecturer if available
+	if user.Student != nil {
+		var lecturer models.Lecturer
+		if err := koneksi.DB.First(&lecturer, user.Student.LecturerID).Error; err == nil && lecturer.AiConstraints != "" {
+			systemPrompt += "\n\nKONSTRAINTA KUSTOM DOSEN:\n" + lecturer.AiConstraints
+		}
+	}
 	
 	consistencyContext := ""
 	if prevFeedback != "" {
@@ -959,7 +967,7 @@ PROCESS:
 
 func GenerateRevisionAssistance(logID uint64, studentQuery string, modelOverride string) (string, error) {
 	var log models.ConsultationLog
-	if err := koneksi.DB.Preload("FeedbackItems").Preload("Student.User").First(&log, logID).Error; err != nil {
+	if err := koneksi.DB.Preload("FeedbackItems").Preload("Student.User").Preload("Student.Lecturer").First(&log, logID).Error; err != nil {
 		return "", fmt.Errorf("database error: %w", err)
 	}
 
@@ -975,6 +983,11 @@ func GenerateRevisionAssistance(logID uint64, studentQuery string, modelOverride
 
 	finalSystemPrompt := strings.ReplaceAll(systemPromptTemplate, feedbackPlaceholder, formattedFeedback)
 	finalSystemPrompt = strings.ReplaceAll(finalSystemPrompt, transcriptPlaceholder, log.TranscriptText)
+
+	// Append custom AI constraints from lecturer if available
+	if log.Student != nil && log.Student.Lecturer != nil && log.Student.Lecturer.AiConstraints != "" {
+		finalSystemPrompt += "\n\nKONSTRAINTA KUSTOM DOSEN:\n" + log.Student.Lecturer.AiConstraints
+	}
 
 	// Apply model override if provided
 	user := log.Student.User

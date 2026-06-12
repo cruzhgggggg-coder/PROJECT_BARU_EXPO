@@ -95,6 +95,31 @@ export default function AIGatewayScreen() {
   const [fetchingModels, setFetchingModels] = useState(false);
   const [fetchError, setFetchError] = useState("");
 
+  // Sync state when user object changes (e.g. after refresh or save)
+  useEffect(() => {
+    if (user) {
+      setOpenaiKey(user.openai_key ?? "");
+      setGeminiKey(user.gemini_key ?? "");
+      setAnthropicKey(user.anthropic_key ?? "");
+      setNvidiaKey(user.nvidia_key ?? "");
+      setGroqKey(user.groq_key ?? "");
+
+      const prefModel = user.preferred_model ?? "gemini:gemini-2.5-flash";
+      setPreferredModel(prefModel);
+
+      // Check if the preferred model is a custom model (not predefined)
+      const parts = prefModel.split(":");
+      const provider = parts[0];
+      const models = PROVIDER_MODELS[provider] || [];
+      const isPredefined = models.some((m) => m.value === prefModel);
+
+      if (prefModel !== "default" && !isPredefined) {
+        setShowCustomInput(true);
+        setCustomModelInput(prefModel);
+      }
+    }
+  }, [user]);
+
   const getKeyForProvider = (provider: string) => {
     if (provider === "openai") return openaiKey;
     if (provider === "gemini") return geminiKey;
@@ -121,10 +146,8 @@ export default function AIGatewayScreen() {
     setFetchingModels(true);
     setFetchError("");
     try {
-      const res = await api<{ models: string[] }>("/api/ai/models", {
-        method: "POST",
-        auth: false,
-        body: JSON.stringify({ provider: "nvidia", api_key: key }),
+      const res = await api<{ models: string[] }>(`/api/ai/models?provider=nvidia&api_key=${encodeURIComponent(key)}`, {
+        method: "GET",
       });
       if (res && res.models && res.models.length > 0) {
         const mapped = res.models.map((m) => {
@@ -233,9 +256,17 @@ export default function AIGatewayScreen() {
     return keyVal && keyVal.length > 8;
   };
 
+  const hasAnyLlmKey = hasKey("openai") || hasKey("gemini") || hasKey("anthropic") || hasKey("nvidia");
+
   const getActiveModelLabel = () => {
+    if (!hasAnyLlmKey) {
+      return "No Model Selected";
+    }
     if (showCustomInput) {
       return customModelInput || "No model set";
+    }
+    if (preferredModel === "default") {
+      return "No Model Selected";
     }
     const parts = preferredModel.split(":");
     if (parts.length >= 2) {
@@ -252,7 +283,9 @@ export default function AIGatewayScreen() {
   };
 
   const getActiveModelProvider = () => {
+    if (!hasAnyLlmKey) return "NO KEY";
     if (showCustomInput) return "custom";
+    if (preferredModel === "default") return "NONE";
     const parts = preferredModel.split(":");
     return parts[0] || "";
   };
@@ -291,10 +324,13 @@ export default function AIGatewayScreen() {
                 <Text className="text-[15px] font-black tracking-tight text-[#F8FAFC]">
                   {getActiveModelLabel()}
                 </Text>
-                <Badge text={getActiveModelProvider().toUpperCase()} color="#6366F1" />
+                <Badge 
+                  text={getActiveModelProvider().toUpperCase()} 
+                  color={getActiveModelProvider() === "NO KEY" ? "#DC2626" : "#6366F1"} 
+                />
               </View>
               <Text className="text-[11px] font-medium text-[#94A3B8]">
-                {preferredModel}
+                {!hasAnyLlmKey ? "Please configure at least one API Key below" : preferredModel}
               </Text>
             </View>
           </GlassCard>
@@ -523,12 +559,17 @@ export default function AIGatewayScreen() {
             <View className="gap-3">
               <View className="flex-row items-center justify-between bg-white/[0.02] border border-white/[0.06] rounded-xl px-4 py-3">
                 <View className="flex-row items-center gap-2.5">
-                  <View className="h-2 w-2 rounded-full bg-[#059669]" />
+                  <View className={`h-2 w-2 rounded-full ${hasAnyLlmKey ? "bg-[#059669]" : "bg-[#DC2626]"}`} />
                   <Text className="text-[12px] font-bold text-[#94A3B8]">LLM Active</Text>
                 </View>
-                <Text className="text-[13px] font-black text-[#F8FAFC]">
-                  {getActiveModelLabel()}
-                </Text>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-[13px] font-black text-[#F8FAFC]">
+                    {getActiveModelLabel()}
+                  </Text>
+                  {!hasAnyLlmKey && (
+                    <Badge text="NO KEY" color="#DC2626" />
+                  )}
+                </View>
               </View>
               <View className="flex-row items-center justify-between bg-white/[0.02] border border-white/[0.06] rounded-xl px-4 py-3">
                 <View className="flex-row items-center gap-2.5">

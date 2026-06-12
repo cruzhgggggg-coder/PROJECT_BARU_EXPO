@@ -1,6 +1,6 @@
 import { Redirect, router } from "expo-router";
-import React, { useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, Pressable, ScrollView } from "react-native";
 
 import { Field } from "@/src/components/ui";
 import { useAuth } from "@/src/providers/AuthProvider";
@@ -12,14 +12,16 @@ import { AuthPageLayout } from "@/src/components/ui/auth-page-layout";
 import { Shield } from "lucide-react";
 
 export default function RegisterScreen() {
-  const { register, user } = useAuth();
+  const { register, user, api } = useAuth();
   const [role, setRole] = useState<"student" | "lecturer">("student");
+  const [lecturers, setLecturers] = useState<any[]>([]);
+  const [showLecturerDropdown, setShowLecturerDropdown] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
     nim: "",
-    lecturer_id: "1",
+    lecturer_id: "",
     prodi: "",
     thesis_title: "",
     nip: "",
@@ -29,6 +31,26 @@ export default function RegisterScreen() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const fetchLecturers = async () => {
+      try {
+        const response = await api<{ data: any[] }>("/auth/lecturers", { auth: false });
+        if (response && response.data) {
+          setLecturers(response.data);
+          if (response.data.length > 0) {
+            setForm((current) => ({
+              ...current,
+              lecturer_id: String(response.data[0].id),
+            }));
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load lecturers:", err);
+      }
+    };
+    void fetchLecturers();
+  }, [api]);
+
   if (user) {
     return <Redirect href="/dashboard" />;
   }
@@ -36,9 +58,16 @@ export default function RegisterScreen() {
   const patch = (key: keyof typeof form, value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
 
+  const selectedLecturer = lecturers.find((lec) => String(lec.id) === form.lecturer_id);
+  const selectedLecturerName = selectedLecturer ? selectedLecturer.name : "Select Advisor...";
+
   const handleRegister = async () => {
     if (!form.name || !form.email || !form.password) {
       setError("Name, Email, and Password are required.");
+      return;
+    }
+    if (role === "student" && !form.lecturer_id) {
+      setError("Academic Advisor selection is required.");
       return;
     }
     setLoading(true);
@@ -139,7 +168,7 @@ export default function RegisterScreen() {
           </View>
 
           {/* Form Fields */}
-          <View className="gap-1">
+          <View className="gap-1" style={{ zIndex: showLecturerDropdown ? 100 : 1 }}>
             <Field
               label="Full Name & Credentials"
               placeholder="Jonathan Doe, M.Sc."
@@ -163,8 +192,8 @@ export default function RegisterScreen() {
             />
 
             {role === "student" ? (
-              <View className="gap-1">
-                <View className="flex-row gap-3">
+              <View className="gap-1" style={{ zIndex: showLecturerDropdown ? 101 : 1 }}>
+                <View className="flex-row gap-3" style={{ zIndex: showLecturerDropdown ? 102 : 1 }}>
                   <View className="flex-1">
                     <Field
                       label="Student ID (NIM)"
@@ -173,13 +202,73 @@ export default function RegisterScreen() {
                       onChangeText={(v) => patch("nim", v)}
                     />
                   </View>
-                  <View className="flex-1">
-                    <Field
-                      label="Advisor Access Code"
-                      placeholder="e.g., 1"
-                      value={form.lecturer_id}
-                      onChangeText={(v) => patch("lecturer_id", v)}
-                    />
+                  <View className="flex-1 relative z-[999]">
+                    <Text className="text-xs font-bold uppercase tracking-wider pl-0.5 text-[#94A3B8] mb-1.5">
+                      Academic Advisor
+                    </Text>
+                    <Pressable
+                      onPress={() => setShowLecturerDropdown(!showLecturerDropdown)}
+                      className="flex-row items-center justify-between bg-white/[0.02] border border-white/[0.08] rounded-xl px-4 py-3.5 h-[48px]"
+                      style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.98 : 1 }] }]}
+                    >
+                      <Text className="text-xs font-medium text-slate-200" numberOfLines={1}>
+                        {selectedLecturerName}
+                      </Text>
+                      <Text className="text-[10px] font-black text-indigo-400">
+                        {showLecturerDropdown ? "\u25B2" : "\u25BC"}
+                      </Text>
+                    </Pressable>
+
+                    {showLecturerDropdown && (
+                      <GlassCard
+                        className="absolute top-[54px] left-0 right-0 max-h-[200px] p-2 z-[9999] bg-slate-950/95 border-white/[0.08]"
+                        style={{ boxShadow: "0 10px 15px rgba(0,0,0,0.3)" }}
+                      >
+                        <ScrollView
+                          nestedScrollEnabled={true}
+                          showsVerticalScrollIndicator={true}
+                          {...({ className: "ultra-thin-scroll" } as any)}
+                          contentContainerStyle={{ gap: 6 }}
+                        >
+                          {lecturers.map((lec) => {
+                            const isSelected = String(lec.id) === form.lecturer_id;
+                            return (
+                              <Pressable
+                                key={lec.id}
+                                onPress={() => {
+                                  patch("lecturer_id", String(lec.id));
+                                  setShowLecturerDropdown(false);
+                                }}
+                                className="flex-row items-center justify-between p-2 rounded-lg"
+                                style={({ pressed }) => [
+                                  {
+                                    backgroundColor: isSelected ? "rgba(99, 102, 241, 0.08)" : "transparent",
+                                    borderWidth: 1,
+                                    borderColor: isSelected ? "rgba(99, 102, 241, 0.15)" : "transparent",
+                                    transform: [{ scale: pressed ? 0.98 : 1 }]
+                                  }
+                                ]}
+                              >
+                                <View className="flex-1">
+                                  <Text className={`text-xs font-bold ${isSelected ? "text-indigo-400" : "text-slate-300"}`} numberOfLines={1}>
+                                    {lec.name}
+                                  </Text>
+                                  <Text className="text-[10px] text-slate-500 mt-0.5">
+                                    NIP: {lec.nip} | {lec.faculty}
+                                  </Text>
+                                </View>
+                                {isSelected && <View className="w-1.5 h-1.5 rounded-full bg-indigo-500" />}
+                              </Pressable>
+                            );
+                          })}
+                          {lecturers.length === 0 && (
+                            <Text className="text-slate-500 text-xs text-center py-2">
+                              No advisors registered yet
+                            </Text>
+                          )}
+                        </ScrollView>
+                      </GlassCard>
+                    )}
                   </View>
                 </View>
                 <Field

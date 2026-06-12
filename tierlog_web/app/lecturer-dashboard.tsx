@@ -831,11 +831,31 @@ export default function LecturerDashboardScreen() {
                                     <Text className="text-slate-300 text-xs font-semibold" numberOfLines={1}>{latestLog.paper_filename}</Text>
                                   </View>
                                   <Pressable
-                                    onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${latestLog.paper_filename}`)}
+                                    onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${encodeURIComponent(latestLog.paper_filename)}`)}
                                     className="px-3 py-1.5 rounded-lg bg-indigo-500/[0.12] border border-indigo-500/[0.25]"
                                     style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                                   >
                                     <Text className="text-indigo-500 text-[11px] font-extrabold tracking-[0.5px]">DOWNLOAD DRAFT</Text>
+                                  </Pressable>
+                                </View>
+                              ) : null}
+                              {latestLog.revised_document_filename ? (
+                                <View className="mt-2 border-t border-white/[0.06] pt-3 flex-row justify-between items-center">
+                                  <View className="flex-1 mr-2.5">
+                                    <Text className="text-violet-400 text-[9px] font-extrabold tracking-widest uppercase mb-0.5">REVISED DRAFT</Text>
+                                    <Text className="text-slate-300 text-xs font-semibold" numberOfLines={1}>{latestLog.revised_document_filename}</Text>
+                                    {latestLog.revised_document_uploaded_at && (
+                                      <Text className="text-slate-400 text-[10px] mt-0.5">
+                                        Uploaded: {new Date(latestLog.revised_document_uploaded_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
+                                      </Text>
+                                    )}
+                                  </View>
+                                  <Pressable
+                                    onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/revised/${encodeURIComponent(latestLog.revised_document_filename)}`)}
+                                    className="px-3 py-1.5 rounded-lg bg-violet-500/[0.12] border border-violet-500/[0.25]"
+                                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                                  >
+                                    <Text className="text-violet-500 text-[11px] font-extrabold tracking-[0.5px]">DOWNLOAD REVISED</Text>
                                   </Pressable>
                                 </View>
                               ) : null}
@@ -1025,6 +1045,16 @@ export default function LecturerDashboardScreen() {
                                       )}
                                     </View>
                                     <Text className="text-slate-300 text-[13px] leading-5 font-medium">{item.content}</Text>
+
+                                    {/* Fix Proof Text Display */}
+                                    {item.fix_proof_text ? (
+                                      <View className="mt-2 bg-emerald-500/[0.04] border border-emerald-500/[0.12] rounded-lg p-2.5 gap-1">
+                                        <Text className="text-emerald-500 text-[9px] font-black tracking-[1.5px]">STUDENT FIX DESCRIPTION</Text>
+                                        <Text className="text-slate-300 text-[12px] font-medium" style={{ lineHeight: 18 }}>
+                                          {item.fix_proof_text}
+                                        </Text>
+                                      </View>
+                                    ) : null}
 
                                     {/* Comments Thread */}
                                     {item.comments && item.comments.length > 0 && (
@@ -1219,7 +1249,7 @@ export default function LecturerDashboardScreen() {
                                   )}
                                   {log.paper_filename && (
                                     <Pressable
-                                      onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${log.paper_filename}`)}
+                                      onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
                                       className="px-2 py-0.5 rounded-md bg-indigo-500/[0.06] border border-indigo-500/[0.12]"
                                       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
                                     >

@@ -78,14 +78,15 @@ type RedeemCode struct {
 }
 
 type Lecturer struct {
-	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID    uint64    `gorm:"not null" json:"user_id"`
-	NIP       string    `gorm:"column:nip;unique;not null;type:varchar(20)" json:"nip"`
-	Name      string    `gorm:"not null;type:varchar(100)" json:"name"`
-	Keahlian  string    `gorm:"type:varchar(100)" json:"keahlian"`
-	Faculty   string    `gorm:"type:varchar(100)" json:"faculty"`
-	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	ID            uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID        uint64    `gorm:"not null" json:"user_id"`
+	NIP           string    `gorm:"column:nip;unique;not null;type:varchar(20)" json:"nip"`
+	Name          string    `gorm:"not null;type:varchar(100)" json:"name"`
+	Keahlian      string    `gorm:"type:varchar(100)" json:"keahlian"`
+	Faculty       string    `gorm:"type:varchar(100)" json:"faculty"`
+	AiConstraints string    `gorm:"type:text" json:"ai_constraints"`
+	CreatedAt     time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt     time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 
 	User User `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user,omitempty"`
 }
@@ -106,20 +107,22 @@ type Student struct {
 }
 
 type ConsultationLog struct {
-	ID                     uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
-	StudentID              uint64         `gorm:"not null" json:"student_id"`
-	AudioFilename          string         `gorm:"type:varchar(255)" json:"audio_filename"`
-	TranscriptFilename     string         `gorm:"type:varchar(255)" json:"transcript_filename"`
-	TranscriptText         string         `gorm:"type:longtext" json:"transcript_text"`
-	PaperFilename          string         `gorm:"type:varchar(255)" json:"paper_filename"`
-	FinalDocumentFilename  string         `gorm:"type:varchar(255)" json:"final_document_filename"`
-	FinalDocumentUploadedAt *time.Time    `json:"final_document_uploaded_at"`
-	CreatedAt              time.Time      `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt              time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
+	ID                         uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
+	StudentID                  uint64         `gorm:"not null" json:"student_id"`
+	AudioFilename              string         `gorm:"type:varchar(255)" json:"audio_filename"`
+	TranscriptFilename         string         `gorm:"type:varchar(255)" json:"transcript_filename"`
+	TranscriptText             string         `gorm:"type:longtext" json:"transcript_text"`
+	PaperFilename              string         `gorm:"type:varchar(255)" json:"paper_filename"`
+	FinalDocumentFilename      string         `gorm:"type:varchar(255)" json:"final_document_filename"`
+	FinalDocumentUploadedAt    *time.Time     `json:"final_document_uploaded_at"`
+	RevisedDocumentFilename    string         `gorm:"type:varchar(255)" json:"revised_document_filename"`
+	RevisedDocumentUploadedAt  *time.Time     `json:"revised_document_uploaded_at"`
+	CreatedAt                  time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt                  time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 
-	Student       *Student          `gorm:"foreignKey:StudentID;constraint:OnDelete:CASCADE" json:"student,omitempty"`
-	FeedbackItems []FeedbackItem    `gorm:"foreignKey:ConsultationLogID;constraint:OnDelete:CASCADE" json:"feedback_items"`
-	RevisionAnnotations []RevisionAnnotation `gorm:"foreignKey:ConsultationLogID;constraint:OnDelete:CASCADE" json:"revision_annotations,omitempty"`
+	Student            *Student               `gorm:"foreignKey:StudentID;constraint:OnDelete:CASCADE" json:"student,omitempty"`
+	FeedbackItems      []FeedbackItem         `gorm:"foreignKey:ConsultationLogID;constraint:OnDelete:CASCADE" json:"feedback_items"`
+	RevisionAnnotations []RevisionAnnotation  `gorm:"foreignKey:ConsultationLogID;constraint:OnDelete:CASCADE" json:"revision_annotations,omitempty"`
 }
 
 type FeedbackItem struct {
@@ -128,6 +131,7 @@ type FeedbackItem struct {
 	Content           string           `gorm:"type:text;not null" json:"content"`
 	Category          FeedbackCategory `gorm:"type:enum('Minor','Major');not null" json:"category"`
 	Status            FeedbackStatus   `gorm:"type:enum('Fixed','Pending','Validated');not null;default:'Pending'" json:"status"`
+	FixProofText      string           `gorm:"type:text" json:"fix_proof_text"`
 	CreatedAt         time.Time        `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt         time.Time        `gorm:"autoUpdateTime" json:"updated_at"`
 
