@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Text, View, ScrollView, Pressable, Platform } from "react-native";
-import { motion } from "framer-motion";
+import { Text, View, ScrollView, Pressable, Platform, Linking, Image } from "react-native";
+import { MotionDiv } from "@/src/lib/motion";
 import { staggerContainer, staggerItem } from "@/src/lib/animations";
-import { Archive, AlertCircle, CheckCircle, Clock, User, ChevronDown, ChevronRight } from "lucide-react";
+import { Archive, AlertCircle, CheckCircle, Clock, User, ChevronDown, ChevronRight } from "lucide-react-native";
 
 import { GlassCard } from "@/src/components/ui/glass-card";
 import { NavBar } from "@/src/components/NavBar";
@@ -80,7 +80,7 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
             {/* Download links */}
             <View className="flex-row gap-3 flex-wrap">
               <Pressable
-                onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
+                onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
                 style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
               >
                 <Text className="text-[11px] font-bold text-[#3B82F6] underline">
@@ -89,7 +89,7 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
               </Pressable>
               {log.revised_document_filename && (
                 <Pressable
-                  onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/revised/${encodeURIComponent(log.revised_document_filename)}`)}
+                  onPress={() => Linking.openURL(`${API_URL}/storage/revised/${encodeURIComponent(log.revised_document_filename || "")}`)}
                   style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                 >
                   <Text className="text-[11px] font-bold text-[#7C3AED] underline">
@@ -210,13 +210,17 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
                         </View>
                         <Badge text={`Correction #${idx + 1}`} color="#6366F1" />
                       </View>
-                      {ann.file_type === "image" && Platform.OS === "web" && (
-                        <img
-                          src={`${API_URL}/storage/annotations/${ann.filename}`}
-                          alt={ann.filename}
-                          style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 8, opacity: 0.92 } as any}
-                          onError={(e: any) => { e.target.style.display = "none"; }}
-                        />
+                      {ann.file_type === "image" && (
+                        Platform.OS === "web" ? (
+                          <img
+                            src={`${API_URL}/storage/annotations/${ann.filename}`}
+                            alt={ann.filename}
+                            style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 8, opacity: 0.92 } as any}
+                            onError={(e: any) => { e.target.style.display = "none"; }}
+                          />
+                        ) : (
+                          <Image source={{ uri: `${API_URL}/storage/annotations/${ann.filename}` }} style={{ width: "100%", height: 160, borderRadius: 8, opacity: 0.92 }} resizeMode="cover" />
+                        )
                       )}
                       <View className="bg-white/[0.02] border border-white/[0.04] rounded-[10px] p-2.5 gap-1">
                         <Text className="text-[9px] font-black tracking-[1.5px] text-[#6366F1]">EXTRACTED CONTENT</Text>
@@ -507,15 +511,15 @@ export default function ArchiveScreen() {
                   <Text className="text-xl font-black tracking-tight text-[#F8FAFC]">Consultation Timeline</Text>
                 </View>
 
-                <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="gap-7 relative">
+                <MotionDiv variants={staggerContainer} initial="hidden" animate="visible" className="gap-7 relative">
                   {filteredLogs.length > 0 && (
                     <View className="absolute left-[11px] top-3 bottom-6 w-0.5 bg-[rgba(99,102,241,0.12)] z-[1]" />
                   )}
 
                   {filteredLogs.map((log, idx) => (
-                    <motion.div key={log.id} variants={staggerItem}>
+                    <MotionDiv key={log.id} variants={staggerItem}>
                       <TimelineItem log={log} sessionNumber={filteredLogs.length - idx} />
-                    </motion.div>
+                    </MotionDiv>
                   ))}
 
                   {!filteredLogs.length && (
@@ -528,7 +532,7 @@ export default function ArchiveScreen() {
                       </Text>
                     </View>
                   )}
-                </motion.div>
+                </MotionDiv>
               </GlassCard>
             </View>
           </View>
@@ -572,15 +576,15 @@ export default function ArchiveScreen() {
                 <Text className="text-xl font-black tracking-tight text-[#F8FAFC]">My Consultation History</Text>
               </View>
 
-              <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="gap-7 relative">
+              <MotionDiv variants={staggerContainer} initial="hidden" animate="visible" className="gap-7 relative">
                 {filteredLogs.length > 0 && (
                   <View className="absolute left-[11px] top-3 bottom-6 w-0.5 bg-[rgba(99,102,241,0.12)] z-[1]" />
                 )}
 
                 {filteredLogs.map((log, idx) => (
-                  <motion.div key={log.id} variants={staggerItem}>
+                  <MotionDiv key={log.id} variants={staggerItem}>
                     <TimelineItem log={log} sessionNumber={filteredLogs.length - idx} />
-                  </motion.div>
+                  </MotionDiv>
                 ))}
 
                 {!filteredLogs.length && (
@@ -589,7 +593,7 @@ export default function ArchiveScreen() {
                     <Text className="text-sm font-semibold text-[#64748B] text-center">No consultation sessions found.</Text>
                   </View>
                 )}
-              </motion.div>
+              </MotionDiv>
             </GlassCard>
           </View>
         )}

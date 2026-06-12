@@ -1,8 +1,87 @@
 import React, { useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { CloudUpload, CheckCircle } from "lucide-react";
+import { CloudUpload, CheckCircle } from "lucide-react-native";
 import { cn } from "@/src/lib/utils";
 
+// ─── Native version ──────────────────────────────────────────────────────────
+function WebFileInputNative({
+  label,
+  accept,
+  onFileSelect,
+}: {
+  label: string;
+  accept: string;
+  onFileSelect: (file: any | null) => void;
+}) {
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+
+  const handlePress = async () => {
+    try {
+      const DocumentPicker = require("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: accept.split(",").map((a) => a.trim()),
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        setSelectedFileName(file.name);
+        const fileObj = {
+          uri: file.uri,
+          name: file.name,
+          type: file.mimeType || "application/octet-stream",
+          size: file.size,
+        };
+        onFileSelect(fileObj);
+      }
+    } catch (err) {
+      console.error("Document picker error:", err);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.label}>{label}</Text>
+
+      <Pressable
+        onPress={() => void handlePress()}
+        style={({ pressed }) => [
+          styles.dropzone,
+          selectedFileName ? styles.dropzoneActive : styles.dropzoneInactive,
+          { transform: [{ scale: pressed ? 0.98 : 1 }] },
+        ]}
+        className={cn(
+          selectedFileName ? "bg-white/[0.05]" : "bg-white/[0.03]",
+          "border border-white/[0.08] rounded-[20px] p-5",
+        )}
+      >
+        {selectedFileName ? (
+          <View style={styles.fileSelectedWrap}>
+            <View style={styles.successIconWrapper}>
+              <CheckCircle color="#10b981" size={24} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fileLabel}>UPLOADED DOCUMENT</Text>
+              <Text style={styles.fileName} numberOfLines={1}>
+                {selectedFileName}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.emptyWrap}>
+            <CloudUpload color="#64748b" size={28} />
+            <Text style={styles.instruction}>
+              Tap to select document
+            </Text>
+            <Text style={styles.formatTip}>Supported format: {accept}</Text>
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+// ─── Web version ─────────────────────────────────────────────────────────────
 export function WebFileInput({
   label,
   accept,
@@ -12,14 +91,14 @@ export function WebFileInput({
   accept: string;
   onFileSelect: (file: File | null) => void;
 }) {
+  if (Platform.OS !== "web") {
+    return <WebFileInputNative label={label} accept={accept} onFileSelect={onFileSelect} />;
+  }
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
-
-  if (Platform.OS !== "web") {
-    return null;
-  }
 
   const handlePress = () => {
     fileInputRef.current?.click();
@@ -48,7 +127,6 @@ export function WebFileInput({
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
-      // Simple validation for accept types
       if (accept.includes("audio") && !file.type.startsWith("audio/")) {
         return;
       }
@@ -60,7 +138,6 @@ export function WebFileInput({
     }
   };
 
-  // Determine border and glow styling
   const isGlowing = isDragActive || isHovered;
   const activeColor = selectedFileName ? "#10b981" : "#6366f1";
 

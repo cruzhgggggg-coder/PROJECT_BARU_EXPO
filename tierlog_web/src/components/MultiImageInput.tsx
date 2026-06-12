@@ -33,8 +33,167 @@ function TrashIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Native version ──────────────────────────────────────────────────────────
+function MultiImageInputNative({
+  label,
+  files,
+  onFilesChange,
+}: {
+  label: string;
+  files: any[];
+  onFilesChange: (files: any[]) => void;
+}) {
+  const pickImage = async () => {
+    try {
+      const ImagePicker = require("expo-image-picker");
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+      });
 
+      if (!result.canceled && result.assets) {
+        const newFiles = result.assets.map((asset: any) => ({
+          uri: asset.uri,
+          name: asset.fileName || `image_${Date.now()}.jpg`,
+          type: asset.mimeType || "image/jpeg",
+        }));
+        onFilesChange([...files, ...newFiles]);
+      }
+    } catch (err) {
+      console.error("Image picker error:", err);
+    }
+  };
+
+  const pickDocx = async () => {
+    try {
+      const DocumentPicker = require("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets) {
+        const newFiles = result.assets.map((asset: any) => ({
+          uri: asset.uri,
+          name: asset.name,
+          type: asset.mimeType || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }));
+        onFilesChange([...files, ...newFiles]);
+      }
+    } catch (err) {
+      console.error("Document picker error:", err);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    onFilesChange(files.filter((_: any, i: number) => i !== index));
+  };
+
+  return (
+    <View style={{ marginBottom: 20, gap: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4 }}>
+        <Text style={{ color: "#64748b", fontSize: 10, fontWeight: "900", letterSpacing: 1.5, textTransform: "uppercase" as const }}>
+          {label}
+        </Text>
+        {files.length > 0 && (
+          <View style={{ backgroundColor: "rgba(167, 139, 250, 0.18)", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99, borderWidth: 1, borderColor: "rgba(167, 139, 250, 0.35)" }}>
+            <Text style={{ color: "#a78bfa", fontSize: 10, fontWeight: "700" }}>{files.length} files</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <Pressable
+          onPress={() => void pickImage()}
+          style={({ pressed }) => ({
+            flex: 1,
+            minHeight: 80,
+            borderRadius: 14,
+            borderWidth: 1.5,
+            borderStyle: "dashed" as const,
+            borderColor: "rgba(167, 139, 250, 0.22)",
+            justifyContent: "center" as const,
+            alignItems: "center" as const,
+            gap: 6,
+            padding: 12,
+            backgroundColor: "rgba(255,255,255,0.03)",
+            transform: [{ scale: pressed ? 0.98 : 1 }],
+          })}
+        >
+          <Text style={{ color: "#a78bfa", fontSize: 24 }}>📸</Text>
+          <Text style={{ color: "#94a3b8", fontSize: 11, fontWeight: "600", textAlign: "center" as const }}>Add Photos</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => void pickDocx()}
+          style={({ pressed }) => ({
+            flex: 1,
+            minHeight: 80,
+            borderRadius: 14,
+            borderWidth: 1.5,
+            borderStyle: "dashed" as const,
+            borderColor: "rgba(96, 165, 250, 0.22)",
+            justifyContent: "center" as const,
+            alignItems: "center" as const,
+            gap: 6,
+            padding: 12,
+            backgroundColor: "rgba(255,255,255,0.03)",
+            transform: [{ scale: pressed ? 0.98 : 1 }],
+          })}
+        >
+          <Text style={{ color: "#60a5fa", fontSize: 24 }}>📄</Text>
+          <Text style={{ color: "#94a3b8", fontSize: 11, fontWeight: "600", textAlign: "center" as const }}>Add DOCX</Text>
+        </Pressable>
+      </View>
+
+      <Text style={{ color: "#475569", fontSize: 10, fontWeight: "500" }}>
+        JPG · PNG · WEBP · DOCX · Multi-file
+      </Text>
+
+      {files.length > 0 && (
+        <View style={{ gap: 8 }}>
+          {files.map((f: any, idx: number) => (
+            <View
+              key={idx}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                padding: 8,
+                gap: 10,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "rgba(167, 139, 250, 0.15)",
+                backgroundColor: "rgba(255,255,255,0.03)",
+                overflow: "hidden",
+              }}
+            >
+              <View style={{ width: 48, height: 48, backgroundColor: "rgba(96, 165, 250, 0.08)", borderRadius: 8, justifyContent: "center" as const, alignItems: "center" as const }}>
+                <Text style={{ color: "#60a5fa", fontSize: 18 }}>
+                  {f.type?.startsWith("image/") ? "📸" : "📄"}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: "#e2e8f0", fontSize: 12, fontWeight: "600" }} numberOfLines={1}>{f.name}</Text>
+                <Text style={{ color: "#64748b", fontSize: 10, marginTop: 2 }}>
+                  {f.type?.startsWith("image/") ? "Annotation Photo" : "Revision DOCX"}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => removeFile(idx)}
+                style={{ padding: 6, backgroundColor: "rgba(239, 68, 68, 0.1)", borderRadius: 8 }}
+              >
+                <Text style={{ color: "#ef4444", fontSize: 12 }}>✕</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Web version ─────────────────────────────────────────────────────────────
 export function MultiImageInput({
   label,
   files,
@@ -44,11 +203,13 @@ export function MultiImageInput({
   files: File[];
   onFilesChange: (files: File[]) => void;
 }) {
+  if (Platform.OS !== "web") {
+    return <MultiImageInputNative label={label} files={files} onFilesChange={onFilesChange} />;
+  }
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-
-  if (Platform.OS !== "web") return null;
 
   const ACCEPTED_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".docx"];
   const ACCEPT_ATTR = "image/*,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -162,7 +323,7 @@ export function MultiImageInput({
               <View style={styles.previewInfo}>
                 <Text style={styles.previewName} numberOfLines={1}>{f.name}</Text>
                 <Text style={styles.previewType}>
-                  {isImage(f) ? "📸 Annotation Photo" : "📄 Revision DOCX"}
+                  {isImage(f) ? "Annotation Photo" : "Revision DOCX"}
                 </Text>
               </View>
               <Pressable

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { motion } from "framer-motion";
+import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { MotionDiv } from "@/src/lib/motion";
 import { cn } from "@/src/lib/utils";
 import { fadeIn } from "@/src/lib/animations";
 import { GlassCard } from "./ui/glass-card";
@@ -30,7 +30,7 @@ export function Page({
       contentContainerStyle={[{ paddingVertical: 32, paddingHorizontal: 24, minHeight: "100%" as any }, contentContainerStyle]}
       style={style}
     >
-      <motion.div initial="hidden" animate="visible" variants={fadeIn}>
+      <MotionDiv initial="hidden" animate="visible" variants={fadeIn}>
         <View className={cn("relative flex flex-col w-full gap-6", fullWidth ? "" : "max-w-[1200px] mx-auto")}>
           {showBackground && (
             <>
@@ -41,7 +41,7 @@ export function Page({
           )}
           {children}
         </View>
-      </motion.div>
+      </MotionDiv>
     </ScrollView>
   );
 }
@@ -80,12 +80,11 @@ export function Field(props: React.ComponentProps<typeof TextInput> & { label: s
       </Text>
       <View className="relative">
         {isFocused && (
-          <motion.div
-            className="absolute -inset-[1px] rounded-xl border-2 border-[#6366F1]/40"
+          <MotionDiv
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.2 }}
-            style={{ pointerEvents: "none" }}
+            style={{ position: "absolute", top: -1, left: -1, right: -1, bottom: -1, borderRadius: 12, borderWidth: 2, borderColor: "rgba(99,102,241,0.4)", pointerEvents: "none" }}
           />
         )}
         <TextInput
@@ -96,10 +95,13 @@ export function Field(props: React.ComponentProps<typeof TextInput> & { label: s
           className={cn(
             "rounded-xl px-4 py-3.5 text-sm font-medium text-[#F8FAFC] border outline-none",
             isFocused
-              ? "bg-white/[0.04] border-[#6366F1] shadow-[0_0_12px_rgba(99,102,241,0.2)]"
+              ? "bg-white/[0.04] border-[#6366F1]"
               : "bg-white/[0.02] border-white/[0.08]"
           )}
-          style={props.style}
+          style={[
+            props.style,
+            isFocused && Platform.OS === "web" ? { boxShadow: "0 0 12px rgba(99,102,241,0.2)" } : undefined,
+          ]}
         />
       </View>
     </View>
@@ -167,13 +169,13 @@ export function StatCard({
 }) {
   return (
     <Pressable
-      className="flex-1 min-w-[200px] relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] p-6"
+      className="flex-1 min-w-[45%] relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 sm:p-6"
       style={({ pressed }) => ({
         transform: [{ translateY: pressed ? -1 : 0 }],
       })}
     >
       <Text className="text-[11px] font-bold uppercase tracking-widest text-[#94A3B8]">{label}</Text>
-      <Text className="mt-2.5 text-[32px] font-black tracking-tight" style={{ color: glowColor }}><AnimatedCounter value={Number(value)} /></Text>
+      <Text className="mt-2.5 text-[28px] sm:text-[32px] font-black tracking-tight" style={{ color: glowColor }}><AnimatedCounter value={Number(value)} /></Text>
       <View
         className="absolute -right-4 -bottom-4 h-[72px] w-[72px] rounded-full"
         style={{ backgroundColor: `${glowColor}08` }}

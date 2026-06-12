@@ -11,7 +11,7 @@ export {
   Clock as ClockIcon,
   ChevronRight as ChevronRightIcon,
   AlertCircle as AlertIcon,
-} from "lucide-react";
+} from "lucide-react-native";
 
 export type IconProps = {
   color?: string;

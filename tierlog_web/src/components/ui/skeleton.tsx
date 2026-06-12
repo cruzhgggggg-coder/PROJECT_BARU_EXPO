@@ -1,15 +1,25 @@
-import React from "react";
-import { View } from "react-native";
-import { motion } from "framer-motion";
+import React, { useEffect, useRef } from "react";
+import { Animated, View } from "react-native";
 import { cn } from "@/src/lib/utils";
 
-function SkeletonPulse({ className, style }: { className?: string; style?: React.CSSProperties }) {
+function SkeletonPulse({ className, style }: { className?: string; style?: any }) {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.6, duration: 750, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 750, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
   return (
-    <motion.div
-      animate={{ opacity: [0.3, 0.6, 0.3] }}
-      transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+    <Animated.View
       className={cn("rounded-xl bg-white/[0.04]", className)}
-      style={style}
+      style={[style, { opacity }]}
     />
   );
 }
@@ -45,7 +55,7 @@ export function SkeletonAvatar({ size = 40, className }: { size?: number; classN
   return (
     <SkeletonPulse
       className={cn("rounded-full", className)}
-      style={{ width: size, height: size } as any}
+      style={{ width: size, height: size }}
     />
   );
 }

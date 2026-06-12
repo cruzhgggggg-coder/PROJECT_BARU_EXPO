@@ -1,9 +1,9 @@
 import { router } from "expo-router";
 import React from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
-import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react-native";
 import { fadeUp } from "@/src/lib/animations";
+import { MotionDiv } from "@/src/lib/motion";
 import { FloatingShapes } from "@/src/components/ui/floating-shapes";
 import { GradientBackground } from "@/src/components/ui/gradient-background";
 
@@ -34,25 +34,25 @@ export function AuthPageLayout({
           </Pressable>
 
           <View className={`flex-row gap-10 items-${align} flex-wrap`}>
-            <motion.div
+            <MotionDiv
               custom={0}
               initial="hidden"
               animate="visible"
               variants={fadeUp}
-              className="flex flex-col flex-1 min-w-[340px] gap-8"
+              style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 340, gap: 32 }}
             >
               {leftContent}
-            </motion.div>
+            </MotionDiv>
 
-            <motion.div
+            <MotionDiv
               custom={1}
               initial="hidden"
               animate="visible"
               variants={fadeUp}
-              className="flex-1 min-w-[340px]"
+              style={{ flex: 1, minWidth: 340 }}
             >
               {rightContent}
-            </motion.div>
+            </MotionDiv>
           </View>
         </View>
       </ScrollView>

@@ -1,16 +1,25 @@
 {
   "expo": {
-    "name": "TierLog Web",
-    "slug": "tierlog-web",
-    "scheme": "tierlog-web",
+    "name": "TierLog",
+    "slug": "tierlog",
+    "scheme": "tierlog",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": { "backgroundColor": "#020617" },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#020617"
+      },
+      "package": "com.tierlog.app",
+      "permissions": ["INTERNET"]
+    },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
     },
-    "experiments": {
-      "typedRoutes": true
-    },
-    "plugins": [
-      "expo-router"
-    ]
+    "experiments": { "typedRoutes": true },
+    "plugins": ["expo-router"]
   }
 }

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Text, View, Pressable, Platform } from "react-native";
 import { router } from "expo-router";
-import { Cpu, CheckCircle, Clock, AlertCircle, User, Archive } from "lucide-react";
-import { motion } from "framer-motion";
+import { Cpu, CheckCircle, Clock, AlertCircle, User, Archive } from "lucide-react-native";
+import { MotionDiv } from "@/src/lib/motion";
 import { staggerContainer, staggerItem, fadeIn } from "@/src/lib/animations";
 
 import { GlassCard } from "@/src/components/ui/glass-card";
@@ -105,7 +105,7 @@ export default function DashboardScreen() {
   return (
     <RequireAuth>
       <Page>
-        <motion.div variants={fadeIn} initial="hidden" animate="visible" className="relative w-full flex flex-col gap-6">
+        <MotionDiv variants={fadeIn} initial="hidden" animate="visible" className="relative w-full flex flex-col gap-6">
         <NavBar />
         
         <Heading
@@ -124,73 +124,73 @@ export default function DashboardScreen() {
           </GlassCard>
         ) : null}
 
-        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="w-full flex flex-col">
+        <MotionDiv variants={staggerContainer} initial="hidden" animate="visible" className="w-full flex flex-col">
         <View className="flex-row gap-4 flex-wrap w-full">
           {user?.role === "student" ? (
             <>
-              <motion.div variants={staggerItem} className="flex-1 min-w-[200px] flex">
+              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
               <StatCard 
                 label="Approved Sessions" 
                 value={stats ? Math.max(0, stats.total_consultations - (stats.pending_feedback > 0 ? 1 : 0)) : "0"} 
                 glowColor="#059669"
               />
-              </motion.div>
-              <motion.div variants={staggerItem} className="flex-1 min-w-[200px] flex">
+              </MotionDiv>
+              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
               <StatCard 
                 label="Pending Revisions" 
                 value={stats?.pending_feedback ?? "0"} 
                 glowColor="#DC2626"
               />
-              </motion.div>
-              <motion.div variants={staggerItem} className="flex-1 min-w-[200px] flex">
+              </MotionDiv>
+              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
               <StatCard 
                 label="Completion Rate" 
                 value={stats ? `${stats.completion_rate}%` : "0%"} 
                 glowColor="#6366F1"
               />
-              </motion.div>
-              <motion.div variants={staggerItem} className="flex-1 min-w-[200px] flex">
+              </MotionDiv>
+              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
               <StatCard 
                 label="Total Document Drafts" 
                 value={stats?.draft_count ?? "0"} 
                 glowColor="#4F46E5"
               />
-              </motion.div>
+              </MotionDiv>
             </>
           ) : (
             <>
-              <motion.div variants={staggerItem} className="flex-1 min-w-[200px] flex">
+              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
               <StatCard 
                 label="Total Consultations" 
                 value={stats?.total_consultations ?? "0"} 
                 glowColor="#4F46E5"
               />
-              </motion.div>
-              <motion.div variants={staggerItem} className="flex-1 min-w-[200px] flex">
+              </MotionDiv>
+              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
               <StatCard 
                 label="Validation Queue" 
                 value={stats?.pending_feedback ?? "0"} 
                 glowColor="#D97706"
               />
-              </motion.div>
-              <motion.div variants={staggerItem} className="flex-1 min-w-[200px] flex">
+              </MotionDiv>
+              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
               <StatCard 
                 label="Average Completion" 
                 value={stats ? `${stats.completion_rate}%` : "0%"} 
                 glowColor="#6366F1"
               />
-              </motion.div>
-              <motion.div variants={staggerItem} className="flex-1 min-w-[200px] flex">
+              </MotionDiv>
+              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
               <StatCard 
                 label="Active Students" 
                 value={stats?.student_count ?? "0"} 
                 glowColor="#3B82F6"
               />
-              </motion.div>
+              </MotionDiv>
             </>
           )}
         </View>
-        </motion.div>
+        </MotionDiv>
 
         {user?.role === "student" ? (
           <GlassCard className="p-7">
@@ -199,7 +199,7 @@ export default function DashboardScreen() {
               <Text className="text-slate-50 text-lg font-black tracking-tight">Active Revision Tasks</Text>
             </View>
             
-            <motion.div variants={staggerContainer} initial="hidden" animate="visible">
+            <MotionDiv variants={staggerContainer} initial="hidden" animate="visible">
             <View className="gap-3.5">
               {stats?.upcoming_quests?.length ? (
                 stats.upcoming_quests.map((item) => {
@@ -207,7 +207,7 @@ export default function DashboardScreen() {
                   const isFixed = item.status === "Fixed";
 
                   return (
-                    <motion.div key={item.id} variants={staggerItem}>
+                    <MotionDiv key={item.id} variants={staggerItem}>
                     <View className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-[18px] gap-3">
                       <View className="flex-row justify-between items-center flex-wrap gap-2.5">
                           <Badge 
@@ -231,7 +231,7 @@ export default function DashboardScreen() {
                       </View>
                       <Text className="text-slate-300 text-sm leading-[22px] font-medium">{item.content}</Text>
                     </View>
-                    </motion.div>
+                    </MotionDiv>
                   );
                 })
               ) : (
@@ -241,7 +241,7 @@ export default function DashboardScreen() {
                 </View>
               )}
             </View>
-            </motion.div>
+            </MotionDiv>
           </GlassCard>
         ) : (
           <GlassCard className="p-7">
@@ -250,7 +250,7 @@ export default function DashboardScreen() {
               <Text className="text-slate-50 text-lg font-black tracking-tight">Active Supervised Students</Text>
             </View>
  
-            <motion.div variants={staggerContainer} initial="hidden" animate="visible">
+            <MotionDiv variants={staggerContainer} initial="hidden" animate="visible">
             <View className="flex-row gap-5 flex-wrap w-full">
               {students.map((student) => {
                 const status = getStudentStatus(student.id);
@@ -258,7 +258,7 @@ export default function DashboardScreen() {
                 const statusColor = status === "NEW SUBMISSIONS" ? "#0891B2" : status === "ALL CLEAR" ? "#059669" : "#6366F1";
 
                 return (
-                  <motion.div key={student.id} variants={staggerItem}>
+                  <MotionDiv key={student.id} variants={staggerItem}>
                   <Pressable
                     onHoverIn={Platform.OS === "web" ? () => setHoveredCard(student.id) : undefined}
                     onHoverOut={Platform.OS === "web" ? () => setHoveredCard(null) : undefined}
@@ -286,7 +286,7 @@ export default function DashboardScreen() {
                       </Text>
                     </View>
                   </Pressable>
-                  </motion.div>
+                  </MotionDiv>
                 );
               })}
 
@@ -297,10 +297,10 @@ export default function DashboardScreen() {
                 </View>
               )}
             </View>
-            </motion.div>
+            </MotionDiv>
           </GlassCard>
         )}
-        </motion.div>
+        </MotionDiv>
       </Page>
     </RequireAuth>
   );

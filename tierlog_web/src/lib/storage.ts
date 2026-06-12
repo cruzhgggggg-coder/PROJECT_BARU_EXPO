@@ -1,3 +1,5 @@
+﻿import { Platform } from "react-native";
+
 type AuthSnapshot = {
   accessToken: string | null;
   refreshToken: string | null;
@@ -6,35 +8,107 @@ type AuthSnapshot = {
 
 const AUTH_KEY = "tierlog.auth";
 
-export function loadAuthSnapshot(): AuthSnapshot | null {
-  if (typeof localStorage === "undefined") {
-    return null;
+// ─── Storage Strategy ───────────────────────────────────────
+// Web:       localStorage (synchronous, no extra deps)
+// Native:    expo-secure-store (encrypted, production)
+//            Falls back to @react-native-async-storage/async-storage (Expo Go / dev)
+// ─────────────────────────────────────────────────────────────
+
+let SecureStore: any = null;
+let AsyncStorage: any = null;
+let storageBackend: "secure" | "async" | null = null;
+
+async function getStorageBackend(): Promise<"secure" | "async" | null> {
+  if (Platform.OS === "web") return null;
+  if (storageBackend) return storageBackend;
+
+  // Try expo-secure-store first (production builds)
+  try {
+    SecureStore = require("expo-secure-store");
+    // Quick test: check if SecureStore actually works on this device
+    await SecureStore.getItemAsync("__test__");
+    storageBackend = "secure";
+  } catch {
+    // SecureStore not available (Expo Go) - fall back to AsyncStorage
+    try {
+      AsyncStorage = require("@react-native-async-storage/async-storage").default;
+      storageBackend = "async";
+    } catch {
+      storageBackend = null;
+    }
   }
 
-  const raw = localStorage.getItem(AUTH_KEY);
-  if (!raw) {
-    return null;
+  return storageBackend;
+}
+
+export async function loadAuthSnapshot(): Promise<AuthSnapshot | null> {
+  if (Platform.OS === "web") {
+    if (typeof localStorage === "undefined") return null;
+    const raw = localStorage.getItem(AUTH_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as AuthSnapshot;
+    } catch {
+      return null;
+    }
   }
+
+  const backend = await getStorageBackend();
 
   try {
+    let raw: string | null = null;
+
+    if (backend === "secure" && SecureStore) {
+      raw = await SecureStore.getItemAsync(AUTH_KEY);
+    } else if (backend === "async" && AsyncStorage) {
+      raw = await AsyncStorage.getItem(AUTH_KEY);
+    }
+
+    if (!raw) return null;
     return JSON.parse(raw) as AuthSnapshot;
   } catch {
     return null;
   }
 }
 
-export function saveAuthSnapshot(snapshot: AuthSnapshot) {
-  if (typeof localStorage === "undefined") {
+export async function saveAuthSnapshot(snapshot: AuthSnapshot) {
+  if (Platform.OS === "web") {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(AUTH_KEY, JSON.stringify(snapshot));
     return;
   }
 
-  localStorage.setItem(AUTH_KEY, JSON.stringify(snapshot));
+  const backend = await getStorageBackend();
+
+  try {
+    const data = JSON.stringify(snapshot);
+
+    if (backend === "secure" && SecureStore) {
+      await SecureStore.setItemAsync(AUTH_KEY, data);
+    } else if (backend === "async" && AsyncStorage) {
+      await AsyncStorage.setItem(AUTH_KEY, data);
+    }
+  } catch (err) {
+    console.error("Failed to save auth snapshot:", err);
+  }
 }
 
-export function clearAuthSnapshot() {
-  if (typeof localStorage === "undefined") {
+export async function clearAuthSnapshot() {
+  if (Platform.OS === "web") {
+    if (typeof localStorage === "undefined") return;
+    localStorage.removeItem(AUTH_KEY);
     return;
   }
 
-  localStorage.removeItem(AUTH_KEY);
+  const backend = await getStorageBackend();
+
+  try {
+    if (backend === "secure" && SecureStore) {
+      await SecureStore.deleteItemAsync(AUTH_KEY);
+    } else if (backend === "async" && AsyncStorage) {
+      await AsyncStorage.removeItem(AUTH_KEY);
+    }
+  } catch (err) {
+    console.error("Failed to clear auth snapshot:", err);
+  }
 }

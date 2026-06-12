@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Text, View } from "react-native";
-import { Lock, CheckCircle, AlertCircle } from "lucide-react";
+import { Lock, CheckCircle, AlertCircle } from "lucide-react-native";
 
 import { GlassCard } from "@/src/components/ui/glass-card";
 import { NavBar } from "@/src/components/NavBar";

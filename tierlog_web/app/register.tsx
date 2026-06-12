@@ -1,6 +1,6 @@
 import { Redirect, router } from "expo-router";
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { View, Text, Pressable, ScrollView, KeyboardAvoidingView, Platform as RNPlatform } from "react-native";
 
 import { Field } from "@/src/components/ui";
 import { useAuth } from "@/src/providers/AuthProvider";
@@ -9,7 +9,7 @@ import { GradientText } from "@/src/components/ui/gradient-text";
 import { GlassCard } from "@/src/components/ui/glass-card";
 import { ElegantButton } from "@/src/components/ui/elegant-button";
 import { AuthPageLayout } from "@/src/components/ui/auth-page-layout";
-import { Shield } from "lucide-react";
+import { Shield } from "lucide-react-native";
 
 export default function RegisterScreen() {
   const { register, user, api } = useAuth();
@@ -94,7 +94,7 @@ export default function RegisterScreen() {
     }
   };
 
-  return (
+  const content = (
     <AuthPageLayout
       align="start"
       leftContent={
@@ -339,4 +339,13 @@ export default function RegisterScreen() {
       }
     />
   );
+
+  if (RNPlatform.OS !== "web") {
+    return (
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+        {content}
+      </KeyboardAvoidingView>
+    );
+  }
+  return content;
 }

@@ -1,7 +1,7 @@
 import { Redirect, router } from "expo-router";
 import React from "react";
-import { Text, View } from "react-native";
-import { motion } from "framer-motion";
+import { Platform, Text, View } from "react-native";
+import { MotionDiv } from "@/src/lib/motion";
 
 import { useAuth } from "@/src/providers/AuthProvider";
 import { ShaderAnimation } from "@/src/components/ui/shader-animation";
@@ -23,30 +23,30 @@ export default function WelcomeScreen() {
   }
 
   return (
-    <motion.div
+    <MotionDiv
       initial="hidden"
       animate="visible"
       variants={fadeIn}
       className="relative min-h-screen bg-[#020617]"
     >
-      <ShaderAnimation />
+      {Platform.OS === "web" && <ShaderAnimation />}
       <GradientBackground />
       <MouseGlow />
       <FloatingShapes />
 
       <View className="relative z-10 flex-1 items-center justify-center px-6 py-20">
         <View className="w-full max-w-2xl items-center text-center">
-          <motion.div custom={0} initial="hidden" animate="visible" variants={fadeUp} className="mb-6 flex flex-col items-center">
+          <MotionDiv custom={0} initial="hidden" animate="visible" variants={fadeUp} className="mb-6 flex flex-col items-center">
             <AnimatedBadge label="TierLog" dotColor="bg-indigo-500/80" />
-          </motion.div>
+          </MotionDiv>
 
-          <motion.div custom={1} initial="hidden" animate="visible" variants={fadeUp} className="mb-4 flex flex-col items-center w-full">
+          <MotionDiv custom={1} initial="hidden" animate="visible" variants={fadeUp} className="mb-4 flex flex-col items-center w-full">
             <ShimmerText className="text-5xl md:text-7xl font-black tracking-tight">
               Elevate Your Academic Vision
             </ShimmerText>
-          </motion.div>
+          </MotionDiv>
 
-          <motion.div custom={2} initial="hidden" animate="visible" variants={fadeUp} className="mb-8 flex flex-col items-center w-full">
+          <MotionDiv custom={2} initial="hidden" animate="visible" variants={fadeUp} className="mb-8 flex flex-col items-center w-full">
             <GradientText
               gradientFrom="from-indigo-300"
               gradientTo="to-purple-400/80"
@@ -54,17 +54,17 @@ export default function WelcomeScreen() {
             >
               Crafting Exceptional Consultations
             </GradientText>
-          </motion.div>
+          </MotionDiv>
 
-          <motion.div custom={3} initial="hidden" animate="visible" variants={fadeUp} className="mb-12 flex flex-col items-center w-full">
+          <MotionDiv custom={3} initial="hidden" animate="visible" variants={fadeUp} className="mb-12 flex flex-col items-center w-full">
             <Text className="text-white/40 text-base md:text-lg leading-relaxed max-w-xl text-center">
               An integrated academic advising portal connecting students and research advisors.
               Track draft progression, collaborate on structured annotations, and verify
               consultation milestones in real-time.
             </Text>
-          </motion.div>
+          </MotionDiv>
 
-          <motion.div custom={4} initial="hidden" animate="visible" variants={fadeUp} className="flex flex-col items-center w-full">
+          <MotionDiv custom={4} initial="hidden" animate="visible" variants={fadeUp} className="flex flex-col items-center w-full">
             <GlassCard className="flex flex-col items-center gap-6 p-8 w-full max-w-md">
               <Text className="text-white/50 text-sm font-medium text-center leading-relaxed">
                 Sign in to consult with your research advisor, review feedback annotations,
@@ -95,9 +95,9 @@ export default function WelcomeScreen() {
                 </Text>
               </View>
             </GlassCard>
-          </motion.div>
+          </MotionDiv>
         </View>
       </View>
-    </motion.div>
+    </MotionDiv>
   );
 }

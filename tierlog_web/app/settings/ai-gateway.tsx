@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Text, View, Platform, Pressable, TextInput } from "react-native";
-import { Cpu, CheckCircle, AlertCircle, Clock, Key, Radio, Settings, Zap } from "lucide-react";
+import { Cpu, CheckCircle, AlertCircle, Clock, Key, Radio, Settings, Zap } from "lucide-react-native";
 
 import { GlassCard } from "@/src/components/ui/glass-card";
 import { NavBar } from "@/src/components/NavBar";
@@ -432,7 +432,7 @@ export default function AIGatewayScreen() {
                                 style={({ pressed }) => ({
                                   transform: [{ scale: pressed ? 0.98 : 1 }],
                                 })}
-                                className={`flex-row items-start gap-3 rounded-xl border p-3.5 gap-2.5 ${
+                                className={`flex-row items-start gap-3 rounded-xl border p-3.5 ${
                                   isSelected
                                     ? "bg-[rgba(99,102,241,0.08)] border-[#6366F1]"
                                     : !connected

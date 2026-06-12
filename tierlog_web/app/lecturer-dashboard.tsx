@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -8,7 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { AlertCircle, Archive, CheckCircle, ChevronLeft, ChevronRight, Clock, User } from "lucide-react";
+import { AlertCircle, Archive, CheckCircle, ChevronLeft, ChevronRight, Clock, User } from "lucide-react-native";
 
 import { GlassCard } from "@/src/components/ui/glass-card";
 import { ElegantButton } from "@/src/components/ui/elegant-button";
@@ -798,7 +799,7 @@ export default function LecturerDashboardScreen() {
                             <View className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
                               <View
                                 className="h-full rounded-full bg-indigo-500"
-                                style={{ width: `${completionPct}%` as any, transition: "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)" } as any}
+                                style={{ width: `${completionPct}%` as any, ...(Platform.OS === "web" ? { transition: "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)" } : {}) } as any}
                               />
                             </View>
                             <Text className="text-slate-400 text-[11px] font-semibold">{completionPct}% revisions validated</Text>
@@ -831,7 +832,7 @@ export default function LecturerDashboardScreen() {
                                     <Text className="text-slate-300 text-xs font-semibold" numberOfLines={1}>{latestLog.paper_filename}</Text>
                                   </View>
                                   <Pressable
-                                    onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${encodeURIComponent(latestLog.paper_filename)}`)}
+                                    onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(latestLog.paper_filename)}`)}
                                     className="px-3 py-1.5 rounded-lg bg-indigo-500/[0.12] border border-indigo-500/[0.25]"
                                     style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                                   >
@@ -851,7 +852,7 @@ export default function LecturerDashboardScreen() {
                                     )}
                                   </View>
                                   <Pressable
-                                    onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/revised/${encodeURIComponent(latestLog.revised_document_filename)}`)}
+                                    onPress={() => Linking.openURL(`${API_URL}/storage/revised/${encodeURIComponent(latestLog.revised_document_filename || "")}`)}
                                     className="px-3 py-1.5 rounded-lg bg-violet-500/[0.12] border border-violet-500/[0.25]"
                                     style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                                   >
@@ -1249,7 +1250,7 @@ export default function LecturerDashboardScreen() {
                                   )}
                                   {log.paper_filename && (
                                     <Pressable
-                                      onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
+                                      onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
                                       className="px-2 py-0.5 rounded-md bg-indigo-500/[0.06] border border-indigo-500/[0.12]"
                                       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
                                     >

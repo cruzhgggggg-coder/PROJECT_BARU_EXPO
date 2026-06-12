@@ -1,6 +1,5 @@
 import React from "react";
-import { Text } from "react-native";
-import { motion } from "framer-motion";
+import { Platform, Pressable, Text } from "react-native";
 import { cn } from "@/src/lib/utils";
 
 type ButtonTone = "primary" | "secondary" | "danger" | "success" | "warning";
@@ -41,18 +40,50 @@ export function ElegantButton({
   tone?: ButtonTone;
   size?: ButtonSize;
 }) {
+  if (Platform.OS === "web") {
+    const { motion } = require("framer-motion");
+    const MotionDiv = motion.div;
+    return (
+      <MotionDiv
+        onClick={disabled ? undefined : onPress}
+        aria-disabled={disabled}
+        whileTap={{ scale: 0.95 }}
+        whileHover={{ scale: 1.025 }}
+        className={cn(
+          "flex items-center justify-center border cursor-pointer w-full",
+          toneStyles[tone],
+          sizeStyles[size],
+          disabled && "opacity-50"
+        )}
+      >
+        <Text
+          className={cn(
+            "font-bold tracking-wide text-center",
+            size === "sm" && "text-xs",
+            size === "md" && "text-sm",
+            size === "lg" && "text-base",
+            tone === "secondary" ? "text-slate-100" : "text-white"
+          )}
+        >
+          {title}
+        </Text>
+      </MotionDiv>
+    );
+  }
+
   return (
-    <motion.div
-      onClick={disabled ? undefined : onPress}
-      aria-disabled={disabled}
-      whileTap={{ scale: 0.95 }}
-      whileHover={{ scale: 1.025 }}
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
       className={cn(
-        "flex items-center justify-center border cursor-pointer w-full",
+        "items-center justify-center border w-full",
         toneStyles[tone],
         sizeStyles[size],
         disabled && "opacity-50"
       )}
+      style={({ pressed }) => ({
+        transform: [{ scale: pressed ? 0.95 : 1 }],
+      })}
     >
       <Text
         className={cn(
@@ -65,6 +96,6 @@ export function ElegantButton({
       >
         {title}
       </Text>
-    </motion.div>
+    </Pressable>
   );
 }

@@ -1,37 +1,69 @@
-import React from "react";
-import { View, Text } from "react-native";
-import { motion } from "framer-motion";
+import React, { useEffect, useRef } from "react";
+import { View, Text, Animated, Platform } from "react-native";
 
 export function LoadingScreen() {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const barScale = useRef(new Animated.Value(0)).current;
+  const dot1 = useRef(new Animated.Value(0.3)).current;
+  const dot2 = useRef(new Animated.Value(0.3)).current;
+  const dot3 = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ]),
+      Animated.timing(barScale, { toValue: 1, duration: 1200, useNativeDriver: true }),
+    ]).start();
+
+    const createDotAnim = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 600, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0.3, duration: 600, useNativeDriver: true }),
+        ])
+      );
+
+    const a1 = createDotAnim(dot1, 0);
+    const a2 = createDotAnim(dot2, 200);
+    const a3 = createDotAnim(dot3, 400);
+    a1.start(); a2.start(); a3.start();
+
+    return () => { a1.stop(); a2.stop(); a3.stop(); };
+  }, []);
+
   return (
     <View className="flex-1 items-center justify-center bg-[#020617]">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.6, ease: [0.23, 0.86, 0.39, 0.96] as [number, number, number, number] }}
-      >
+      <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
         <Text className="text-4xl font-black text-white tracking-tight">TierLog</Text>
-      </motion.div>
+      </Animated.View>
 
-      <motion.div
-        initial={{ scaleX: 0 }}
-        animate={{ scaleX: 1 }}
-        transition={{ duration: 1.2, delay: 0.3, ease: [0.23, 0.86, 0.39, 0.96] as [number, number, number, number] }}
-        className="mt-4 h-0.5 w-16 origin-center rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+      <Animated.View
+        style={{
+          transform: [{ scaleX: barScale }],
+          marginTop: 16,
+          height: 2,
+          width: 64,
+          borderRadius: 99,
+          backgroundColor: "#6366F1",
+        }}
       />
 
       <View className="mt-6 flex-row items-center gap-2">
-        {[0, 1, 2].map((i) => (
-          <motion.div
+        {[dot1, dot2, dot3].map((dot, i) => (
+          <Animated.View
             key={i}
-            animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1, 0.8] }}
-            transition={{
-              duration: 1.2,
-              delay: i * 0.2,
-              repeat: Infinity,
-              ease: "easeInOut",
+            style={{
+              opacity: dot,
+              transform: [{ scale: dot }],
+              height: 8,
+              width: 8,
+              borderRadius: 4,
+              backgroundColor: "#6366F1",
             }}
-            className="h-2 w-2 rounded-full bg-indigo-500"
           />
         ))}
       </View>

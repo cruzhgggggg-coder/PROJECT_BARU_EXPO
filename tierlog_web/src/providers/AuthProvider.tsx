@@ -1,3 +1,21 @@
+// Polyfill atob for React Native
+if (typeof atob === "undefined") {
+  (globalThis as any).atob = (input: string) => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+    let str = input.replace(/=+$/, "");
+    let output = "";
+    for (let bc = 0, bs = 0, buffer: number, i = 0, char: string; (char = str.charAt(i++)); ) {
+      buffer = chars.indexOf(char);
+      if (buffer === -1) break;
+      bs = bc % 4 ? bs * 64 + buffer : buffer;
+      if (bc++ % 4) {
+        output += String.fromCharCode(255 & (bs >> ((-2 * bc) & 6)));
+      }
+    }
+    return output;
+  };
+}
+
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { API_URL } from "@/src/lib/config";
@@ -134,9 +152,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAccessToken(nextAccess);
     setRefreshToken(nextRefresh);
     if (nextUser || nextAccess || nextRefresh) {
-      saveAuthSnapshot({ user: nextUser, accessToken: nextAccess, refreshToken: nextRefresh });
+      saveAuthSnapshot({ user: nextUser, accessToken: nextAccess, refreshToken: nextRefresh }).catch(console.error);
     } else {
-      clearAuthSnapshot();
+      clearAuthSnapshot().catch(console.error);
     }
   }, []);
 
@@ -144,76 +162,85 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser((prev) => {
       const resolved = typeof nextUser === "function" ? (nextUser as Function)(prev) : nextUser;
       if (resolved) {
-        saveAuthSnapshot({ user: resolved, accessToken, refreshToken });
+        saveAuthSnapshot({ user: resolved, accessToken, refreshToken }).catch(console.error);
       } else {
-        clearAuthSnapshot();
+        clearAuthSnapshot().catch(console.error);
       }
       return resolved;
     });
   }, [accessToken, refreshToken]);
 
   useEffect(() => {
-    const snapshot = loadAuthSnapshot();
-    if (!snapshot) {
-      setBooting(false);
-      return;
-    }
-
-    // Helper: decode JWT exp claim without a library
-    const getTokenExp = (token: string | null): number | null => {
-      if (!token) return null;
+    (async () => {
       try {
-        const parts = token.split(".");
-        if (parts.length !== 3) return null;
-        const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-        return typeof payload.exp === "number" ? payload.exp : null;
-      } catch {
-        return null;
-      }
-    };
+        const snapshot = await loadAuthSnapshot();
+        if (!snapshot) {
+          setBooting(false);
+          return;
+        }
 
-    const exp = getTokenExp(snapshot.accessToken);
-    const nowSec = Math.floor(Date.now() / 1000);
-    const isExpiredOrExpiringSoon = exp === null || exp - nowSec < 5 * 60; // < 5 minutes left
-
-    if (isExpiredOrExpiringSoon && snapshot.refreshToken) {
-      // Proactively refresh before rendering anything
-      fetch(`${API_URL}/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: snapshot.refreshToken }),
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data?.access_token) {
-            const freshUser = (data.user as User | null) ?? (snapshot.user as User | null) ?? null;
-            setUser(freshUser);
-            setAccessToken(data.access_token);
-            setRefreshToken(data.refresh_token ?? snapshot.refreshToken);
-            saveAuthSnapshot({
-              user: freshUser,
-              accessToken: data.access_token,
-              refreshToken: data.refresh_token ?? snapshot.refreshToken,
-            });
-          } else {
-            // Refresh token also invalid — force re-login
-            clearAuthSnapshot();
+        // Helper: decode JWT exp claim without a library
+        const getTokenExp = (token: string | null): number | null => {
+          if (!token) return null;
+          try {
+            const parts = token.split(".");
+            if (parts.length !== 3) return null;
+            const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+            return typeof payload.exp === "number" ? payload.exp : null;
+          } catch {
+            return null;
           }
-        })
-        .catch(() => {
-          // Network error during boot — restore snapshot anyway, let 401 handler deal with it
+        };
+
+        const exp = getTokenExp(snapshot.accessToken);
+        const nowSec = Math.floor(Date.now() / 1000);
+        const isExpiredOrExpiringSoon = exp === null || exp - nowSec < 5 * 60; // < 5 minutes left
+
+        if (isExpiredOrExpiringSoon && snapshot.refreshToken) {
+          // Proactively refresh before rendering anything
+          try {
+            const res = await fetch(`${API_URL}/auth/refresh`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ refresh_token: snapshot.refreshToken }),
+            });
+            const data = res.ok ? await res.json() : null;
+            if (data?.access_token) {
+              const freshUser = (data.user as User | null) ?? (snapshot.user as User | null) ?? null;
+              setUser(freshUser);
+              setAccessToken(data.access_token);
+              setRefreshToken(data.refresh_token ?? snapshot.refreshToken);
+              await saveAuthSnapshot({
+                user: freshUser,
+                accessToken: data.access_token,
+                refreshToken: data.refresh_token ?? snapshot.refreshToken,
+              });
+            } else {
+              // Refresh token also invalid — force re-login
+              await clearAuthSnapshot();
+            }
+          } catch {
+            // Network error during boot — restore snapshot anyway, let 401 handler deal with it
+            setUser((snapshot.user as User | null) ?? null);
+            setAccessToken(snapshot.accessToken);
+            setRefreshToken(snapshot.refreshToken);
+          } finally {
+            setBooting(false);
+          }
+        } else {
+          // Token still valid — restore directly
           setUser((snapshot.user as User | null) ?? null);
           setAccessToken(snapshot.accessToken);
           setRefreshToken(snapshot.refreshToken);
-        })
-        .finally(() => setBooting(false));
-    } else {
-      // Token still valid — restore directly
-      setUser((snapshot.user as User | null) ?? null);
-      setAccessToken(snapshot.accessToken);
-      setRefreshToken(snapshot.refreshToken);
-      setBooting(false);
-    }
+          setBooting(false);
+        }
+      } catch (err) {
+        console.error("Boot failed:", err);
+        await clearAuthSnapshot().catch(() => {});
+      } finally {
+        setBooting(false);
+      }
+    })();
   }, []);
 
   const refreshPromiseRef = React.useRef<Promise<string | null> | null>(null);

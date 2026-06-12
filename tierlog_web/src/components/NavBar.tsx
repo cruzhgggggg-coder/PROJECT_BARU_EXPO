@@ -9,11 +9,11 @@ import {
   Lock,
   Cpu,
   LogOut,
-} from "lucide-react";
-import { motion } from "framer-motion";
-import { slideDown } from "@/src/lib/animations";
+} from "lucide-react-native";
 
 import { useAuth } from "@/src/providers/AuthProvider";
+import { MotionDiv } from "@/src/lib/motion";
+import { slideDown } from "@/src/lib/animations";
 
 const studentLinks = [
   { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
@@ -38,12 +38,14 @@ export function NavBar() {
   const links = user?.role === "lecturer" ? lecturerLinks : studentLinks;
 
   return (
-    <motion.div
+    <MotionDiv
       initial="hidden"
       animate="visible"
       variants={slideDown}
     >
-      <View className="flex-row items-center justify-between px-5 py-3 bg-[#030303]/80 backdrop-blur-xl border-b border-white/[0.08] rounded-2xl mb-2 gap-4 flex-wrap">
+      <View className="flex-row items-center justify-between px-5 py-3 bg-[#030303]/80 border-b border-white/[0.08] rounded-2xl mb-2 gap-4 flex-wrap"
+        style={Platform.OS === "web" ? { backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" } as any : undefined}
+      >
         <View className="gap-1">
           <Text className="text-[#F8FAFC] text-lg font-black tracking-tight">
             TierLog
@@ -69,26 +71,25 @@ export function NavBar() {
                 onHoverIn={Platform.OS === "web" ? () => setHoveredLink(link.href) : undefined}
                 onHoverOut={Platform.OS === "web" ? () => setHoveredLink(null) : undefined}
                 className={[
-                  "flex-row items-center gap-[7px] px-3.5 py-[9px] rounded-[10px] border transition-all duration-200",
-                  isHovered ? "scale-[1.01]" : "scale-100",
+                  "flex-row items-center gap-[7px] px-3.5 py-[9px] rounded-[10px] border",
                   isActive
                     ? "bg-[#6366F1] border-[#6366F1]/20"
-                    : isHovered
+                    : isHovered && Platform.OS === "web"
                     ? "bg-[#6366F1]/[0.08] border-[#6366F1]/[0.15]"
                     : "bg-transparent border-transparent",
                 ].join(" ")}
+                style={Platform.OS === "web" ? { transition: "all 0.2s ease", transform: [{ scale: isHovered ? 1.01 : 1 }] } as any : undefined}
               >
                 <Icon
                   color={isActive ? "#ffffff" : isHovered ? "#6366F1" : "#94A3B8"}
                   size={15}
-                  className="transition-colors duration-200"
                 />
                 <Text
                   className={[
-                    "text-[13px] font-bold tracking-[-0.1px] transition-colors duration-200",
+                    "text-[13px] font-bold tracking-[-0.1px]",
                     isActive
                       ? "text-white"
-                      : isHovered
+                      : isHovered && Platform.OS === "web"
                       ? "text-[#6366F1]"
                       : "text-[#94A3B8]",
                   ].join(" ")}
@@ -104,21 +105,20 @@ export function NavBar() {
             onHoverIn={Platform.OS === "web" ? () => setHoveredLink("logout") : undefined}
             onHoverOut={Platform.OS === "web" ? () => setHoveredLink(null) : undefined}
             className={[
-              "flex-row items-center gap-[7px] px-3.5 py-[9px] rounded-[10px] border transition-all duration-200",
-              hoveredLink === "logout" ? "scale-[1.01]" : "scale-100",
-              hoveredLink === "logout"
+              "flex-row items-center gap-[7px] px-3.5 py-[9px] rounded-[10px] border",
+              hoveredLink === "logout" && Platform.OS === "web"
                 ? "bg-[#EF4444] border-[#EF4444]/20"
                 : "bg-transparent border-transparent",
             ].join(" ")}
+            style={Platform.OS === "web" ? { transition: "all 0.2s ease" } as any : undefined}
           >
             <LogOut
               color={hoveredLink === "logout" ? "#ffffff" : "#EF4444"}
               size={15}
-              className="transition-colors duration-200"
             />
             <Text
               className={[
-                "text-[13px] font-bold tracking-[-0.1px] transition-colors duration-200",
+                "text-[13px] font-bold tracking-[-0.1px]",
                 hoveredLink === "logout" ? "text-white" : "text-[#EF4444]",
               ].join(" ")}
             >
@@ -127,6 +127,6 @@ export function NavBar() {
           </Pressable>
         </View>
       </View>
-    </motion.div>
+    </MotionDiv>
   );
 }

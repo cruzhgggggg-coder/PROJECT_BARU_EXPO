@@ -315,7 +315,8 @@ func UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	if user.Role == models.RoleStudent {
+	switch user.Role {
+	case models.RoleStudent:
 		var student models.Student
 		if err := koneksi.DB.Where("user_id = ?", user.ID).First(&student).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Student profile not found"})
@@ -335,7 +336,7 @@ func UpdateProfile(c *gin.Context) {
 			return
 		}
 		user.Student = &student
-	} else if user.Role == models.RoleLecturer {
+	case models.RoleLecturer:
 		var lecturer models.Lecturer
 		if err := koneksi.DB.Where("user_id = ?", user.ID).First(&lecturer).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Lecturer profile not found"})
@@ -833,17 +834,18 @@ func UpdateFeedbackStatusV2(c *gin.Context) {
 		return
 	}
 
-	if user.Role == models.RoleStudent {
+	switch user.Role {
+	case models.RoleStudent:
 		if req.Status != string(models.StatusFixed) && req.Status != string(models.StatusPending) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Students can only change status to Pending or Fixed"})
 			return
 		}
-	} else if user.Role == models.RoleLecturer {
+	case models.RoleLecturer:
 		if req.Status != string(models.StatusValidated) && req.Status != string(models.StatusPending) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Lecturers can only validate (Validated) or return status to Pending"})
 			return
 		}
-	} else {
+	default:
 		c.JSON(http.StatusForbidden, gin.H{"error": "Unknown role"})
 		return
 	}

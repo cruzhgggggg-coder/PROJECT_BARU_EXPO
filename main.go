@@ -45,7 +45,14 @@ func corsMiddleware() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		if allowedOrigins[origin] {
+		allowed := allowedOrigins[origin]
+		if !allowed {
+			// Check for configured tunnel origin
+			if tunnelOrigin := os.Getenv("NGROK_ORIGIN"); tunnelOrigin != "" && origin == tunnelOrigin {
+				allowed = true
+			}
+		}
+		if allowed {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		}

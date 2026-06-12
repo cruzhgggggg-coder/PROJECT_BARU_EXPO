@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Animated, Image, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { NavBar } from "@/src/components/NavBar";
 import { RequireAuth } from "@/src/components/RequireAuth";
@@ -18,7 +18,7 @@ import {
   Clock,
   AlertCircle,
   ChevronRight,
-} from "lucide-react";
+} from "lucide-react-native";
 
 type ChatMessage = {
   role: string;
@@ -89,7 +89,7 @@ const TypingIndicator = ({ label = "AI THINKING", color = "#7C3AED" }: TypingInd
   return (
     <View
       className="flex-row items-center rounded-2xl border border-white/[0.06] bg-slate-800/50 p-3.5 max-w-[85%]"
-      style={{ gap: 5, boxShadow: `0 0 8px ${color}0D` }}
+      style={{ gap: 5, ...(Platform.OS === "web" ? { boxShadow: `0 0 8px ${color}0D` } : { shadowColor: color, shadowOpacity: 0.05, shadowRadius: 8 }) }}
     >
       <Text className="text-[9px] font-black tracking-[0.8px]" style={{ color: color, marginRight: 4 }}>
         {label}
@@ -549,7 +549,7 @@ export default function ConsultationsScreen() {
     setIsTranscribing(true);
     setTimeout(() => {
       setIsTranscribing(false);
-      alert("AI transcript has been successfully reprocessed and synchronized.");
+      Alert.alert("Success", "AI transcript has been successfully reprocessed and synchronized.");
     }, 2000);
   };
 
@@ -557,7 +557,7 @@ export default function ConsultationsScreen() {
     setIsAnalyzing(true);
     setTimeout(() => {
       setIsAnalyzing(false);
-      alert("Feedback metrics and version consistency analysis have been updated.");
+      Alert.alert("Success", "Feedback metrics and version consistency analysis have been updated.");
     }, 2000);
   };
 
@@ -714,7 +714,7 @@ export default function ConsultationsScreen() {
                             )}
                           </View>
                           <Pressable
-                            onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/final/${encodeURIComponent(selected!.final_document_filename!)}`)}
+                            onPress={() => Linking.openURL(`${API_URL}/storage/final/${encodeURIComponent(selected!.final_document_filename!)}`)}
                             className="px-2.5 py-1 rounded-md border border-emerald-500/[0.15] bg-emerald-500/[0.08]"
                             style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                           >
@@ -770,7 +770,7 @@ export default function ConsultationsScreen() {
                             )}
                           </View>
                           <Pressable
-                            onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/revised/${encodeURIComponent(selected!.revised_document_filename!)}`)}
+                            onPress={() => Linking.openURL(`${API_URL}/storage/revised/${encodeURIComponent(selected!.revised_document_filename!)}`)}
                             className="px-2.5 py-1 rounded-md border border-violet-500/[0.15] bg-violet-500/[0.08]"
                             style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                           >
@@ -813,7 +813,7 @@ export default function ConsultationsScreen() {
                   {showArchiveDropdown && (
                     <GlassCard
                       className="absolute bottom-14 left-0 right-0 max-h-[220px] p-2.5 z-[99999] bg-slate-900/[0.95] border-white/[0.06]"
-                      style={{ boxShadow: "0 10px 15px rgba(0,0,0,0.1)" }}
+                      style={Platform.OS === "web" ? { boxShadow: "0 10px 15px rgba(0,0,0,0.1)" } : { shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 15 }}
                     >
                       <ScrollView
                         showsVerticalScrollIndicator={true}
@@ -871,7 +871,7 @@ export default function ConsultationsScreen() {
                       <Text className="text-lg font-black tracking-tight text-slate-50">Advisory Workspace</Text>
                       {selected && (
                         <Pressable
-                          onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${encodeURIComponent(selected.paper_filename)}`)}
+                          onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(selected.paper_filename)}`)}
                           className="flex-row items-center gap-1 w-full"
                           style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                         >
@@ -952,7 +952,7 @@ export default function ConsultationsScreen() {
                             style={({ pressed }) => ({
                               gap: 10,
                               transform: [{ scale: pressed ? 0.985 : 1 }],
-                              boxShadow: `0 0 12px ${classifying ? "#7C3AED" : "#0891B2"}14`,
+                              ...(Platform.OS === "web" ? { boxShadow: `0 0 12px ${classifying ? "#7C3AED" : "#0891B2"}14` } : { shadowColor: classifying ? "#7C3AED" : "#0891B2", shadowOpacity: 0.08, shadowRadius: 12 }),
                             })}
                           >
                             <Cpu color={classifying ? "#7C3AED" : "#0891B2"} size={16} />
@@ -1174,20 +1174,28 @@ export default function ConsultationsScreen() {
                                   </Text>
                                 </View>
                                 <Pressable
-                                  onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/annotations/${encodeURIComponent(ann.filename)}`)}
+                                  onPress={() => Linking.openURL(`${API_URL}/storage/annotations/${encodeURIComponent(ann.filename)}`)}
                                   className="bg-violet-600/[0.08] px-2.5 py-1 rounded-md border border-violet-600/[0.15]"
                                   style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                                 >
                                   <Text className="text-violet-600 text-[10px] font-bold">Download</Text>
                                 </Pressable>
                               </View>
-                              {ann.file_type === "image" && Platform.OS === "web" && (
-                                <img
-                                  src={`${API_URL}/storage/annotations/${ann.filename}`}
-                                  alt={ann.filename}
-                                  className="w-full max-h-[180px] object-cover rounded-lg mb-2 opacity-90"
-                                  onError={(e: any) => { e.target.style.display = "none"; }}
-                                />
+                              {ann.file_type === "image" && (
+                                Platform.OS === "web" ? (
+                                  <img
+                                    src={`${API_URL}/storage/annotations/${ann.filename}`}
+                                    alt={ann.filename}
+                                    className="w-full max-h-[180px] object-cover rounded-lg mb-2 opacity-90"
+                                    onError={(e: any) => { e.target.style.display = "none"; }}
+                                  />
+                                ) : (
+                                  <Image
+                                    source={{ uri: `${API_URL}/storage/annotations/${ann.filename}` }}
+                                    style={{ width: "100%", height: 180, borderRadius: 8, marginBottom: 8, opacity: 0.9 }}
+                                    resizeMode="cover"
+                                  />
+                                )
                               )}
                               <View className="bg-white/[0.02] border border-white/[0.04] rounded-[10px] p-2.5 gap-1.5">
                                 <Text className="text-violet-600 text-[9px] font-black tracking-[1.5px]">AI EXTRACTED CONTENT</Text>
@@ -1244,7 +1252,7 @@ export default function ConsultationsScreen() {
                                   </View>
                                   <View className="flex-row gap-2">
                                     <Pressable
-                                      onPress={() => Platform.OS === "web" && window.open(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
+                                      onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
                                       className="px-2.5 py-[5px] rounded-md border border-cyan-600/[0.15] bg-cyan-600/[0.08]"
                                       style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                                     >
@@ -1526,7 +1534,7 @@ export default function ConsultationsScreen() {
                             borderColor: isSelected ? "#6366F1" : "rgba(255, 255, 255, 0.04)",
                             transform: [{ scale: pressed ? 0.98 : 1 }],
                           },
-                          isSelected ? { boxShadow: "0 0 15px rgba(99, 102, 241, 0.15)" } : {},
+                          isSelected ? (Platform.OS === "web" ? { boxShadow: "0 0 15px rgba(99, 102, 241, 0.15)" } : { shadowColor: "#6366F1", shadowOpacity: 0.15, shadowRadius: 15 }) : {},
                         ]}
                       >
                         <View className="flex-row justify-between items-center">
@@ -1583,7 +1591,7 @@ export default function ConsultationsScreen() {
                           className="bg-indigo-500 rounded-xl py-2.5 px-4 items-center justify-center border border-transparent"
                           style={({ pressed }) => ({
                             transform: [{ scale: pressed ? 0.94 : 1 }],
-                            boxShadow: `0 0 12px ${isPlaying ? "#059669" : "#4F46E5"}14`,
+                            ...(Platform.OS === "web" ? { boxShadow: `0 0 12px ${isPlaying ? "#059669" : "#4F46E5"}14` } : { shadowColor: isPlaying ? "#059669" : "#4F46E5", shadowOpacity: 0.08, shadowRadius: 12 }),
                           })}
                         >
                           <Text className="text-white font-black text-[13px]">
@@ -1724,7 +1732,7 @@ export default function ConsultationsScreen() {
                               style={{
                                 backgroundColor: feedbackCategory === "Major" ? "rgba(220, 38, 38, 0.06)" : "rgba(255, 255, 255, 0.02)",
                                 borderColor: feedbackCategory === "Major" ? "#DC2626" : "rgba(255, 255, 255, 0.04)",
-                                boxShadow: feedbackCategory === "Major" ? "0 0 10px rgba(220, 38, 38, 0.1)" : "none",
+                                ...(Platform.OS === "web" ? { boxShadow: feedbackCategory === "Major" ? "0 0 10px rgba(220, 38, 38, 0.1)" : "none" } : { shadowColor: "#DC2626", shadowOpacity: feedbackCategory === "Major" ? 0.1 : 0, shadowRadius: 10 }),
                               }}
                             >
                               <Text className="text-[11px] font-black tracking-[1px]" style={{ color: feedbackCategory === "Major" ? "#DC2626" : "#475569" }}>MAJOR</Text>
@@ -1735,7 +1743,7 @@ export default function ConsultationsScreen() {
                               style={{
                                 backgroundColor: feedbackCategory === "Minor" ? "rgba(99, 102, 241, 0.06)" : "rgba(255, 255, 255, 0.02)",
                                 borderColor: feedbackCategory === "Minor" ? "#6366F1" : "rgba(255, 255, 255, 0.04)",
-                                boxShadow: feedbackCategory === "Minor" ? "0 0 10px rgba(99, 102, 241, 0.1)" : "none",
+                                ...(Platform.OS === "web" ? { boxShadow: feedbackCategory === "Minor" ? "0 0 10px rgba(99, 102, 241, 0.1)" : "none" } : { shadowColor: "#6366F1", shadowOpacity: feedbackCategory === "Minor" ? 0.1 : 0, shadowRadius: 10 }),
                               }}
                             >
                               <Text className="text-[11px] font-black tracking-[1px]" style={{ color: feedbackCategory === "Minor" ? "#4F46E5" : "#475569" }}>MINOR</Text>
@@ -1837,7 +1845,7 @@ export default function ConsultationsScreen() {
                 style={{
                   opacity: opacityAnim,
                   transform: [{ translateX: translateAnim }],
-                  boxShadow: `0 0 16px ${color}1A`,
+                  ...(Platform.OS === "web" ? { boxShadow: `0 0 16px ${color}1A` } : { shadowColor: color, shadowOpacity: 0.1, shadowRadius: 16 }),
                 }}
               >
                 <Text className="text-xl">{icon}</Text>

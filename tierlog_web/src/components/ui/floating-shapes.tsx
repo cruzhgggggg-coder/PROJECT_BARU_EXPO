@@ -1,5 +1,5 @@
-import { View } from "react-native";
-import { motion } from "framer-motion";
+import React, { useEffect, useRef } from "react";
+import { Animated, View } from "react-native";
 import { cn } from "@/src/lib/utils";
 
 type ShapeConfig = {
@@ -12,11 +12,11 @@ type ShapeConfig = {
 };
 
 const defaultShapes: ShapeConfig[] = [
-  { delay: 0.3, width: 600, height: 140, rotate: 12, gradient: "from-indigo-500/[0.15]", className: "left-[-10%] md:left-[-5%] top-[15%] md:top-[20%]" },
-  { delay: 0.5, width: 500, height: 120, rotate: -15, gradient: "from-rose-500/[0.15]", className: "right-[-5%] md:right-[0%] top-[70%] md:top-[75%]" },
-  { delay: 0.4, width: 300, height: 80, rotate: -8, gradient: "from-violet-500/[0.15]", className: "left-[5%] md:left-[10%] bottom-[5%] md:bottom-[10%]" },
-  { delay: 0.6, width: 200, height: 60, rotate: 20, gradient: "from-amber-500/[0.15]", className: "right-[15%] md:right-[20%] top-[10%] md:top-[15%]" },
-  { delay: 0.7, width: 150, height: 40, rotate: -25, gradient: "from-cyan-500/[0.15]", className: "left-[20%] md:left-[25%] top-[5%] md:top-[10%]" },
+  { delay: 300, width: 600, height: 140, rotate: 12, gradient: "from-indigo-500/[0.15]", className: "left-[-10%] md:left-[-5%] top-[15%] md:top-[20%]" },
+  { delay: 500, width: 500, height: 120, rotate: -15, gradient: "from-rose-500/[0.15]", className: "right-[-5%] md:right-[0%] top-[70%] md:top-[75%]" },
+  { delay: 400, width: 300, height: 80, rotate: -8, gradient: "from-violet-500/[0.15]", className: "left-[5%] md:left-[10%] bottom-[5%] md:bottom-[10%]" },
+  { delay: 600, width: 200, height: 60, rotate: 20, gradient: "from-amber-500/[0.15]", className: "right-[15%] md:right-[20%] top-[10%] md:top-[15%]" },
+  { delay: 700, width: 150, height: 40, rotate: -25, gradient: "from-cyan-500/[0.15]", className: "left-[20%] md:left-[25%] top-[5%] md:top-[10%]" },
 ];
 
 function ElegantShape({
@@ -34,35 +34,50 @@ function ElegantShape({
   rotate?: number;
   gradient?: string;
 }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(-150)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 1200, delay, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 2400, delay, useNativeDriver: true }),
+    ]).start();
+
+    const float = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, { toValue: 15, duration: 6000, useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0, duration: 6000, useNativeDriver: true }),
+      ])
+    );
+    const timeout = setTimeout(() => float.start(), delay);
+    return () => { clearTimeout(timeout); float.stop(); };
+  }, []);
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -150, rotate: rotate - 15 }}
-      animate={{ opacity: 1, y: 0, rotate: rotate }}
-      transition={{
-        duration: 2.4,
-        delay,
-        ease: [0.23, 0.86, 0.39, 0.96] as [number, number, number, number],
-        opacity: { duration: 1.2 },
+    <Animated.View
+      style={{
+        position: "absolute",
+        opacity: fadeAnim,
+        transform: [{ translateY: Animated.add(translateY, floatAnim) }, { rotate: `${rotate}deg` }],
       }}
-      className={cn("absolute", className)}
+      className={cn(className)}
     >
-      <motion.div
-        animate={{ y: [0, 15, 0] }}
-        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-        style={{ width, height }}
-        className="relative"
+      <View
+        style={{ width, height, borderRadius: 9999, overflow: "hidden" }}
       >
-        <div
+        <View
           className={cn(
             "absolute inset-0 rounded-full",
-            "bg-gradient-to-r to-transparent",
             gradient,
-            "backdrop-blur-[2px] border-2 border-white/[0.15]",
-            "shadow-[0_8px_32px_0_rgba(255,255,255,0.1)]"
           )}
+          style={{
+            borderWidth: 2,
+            borderColor: "rgba(255,255,255,0.15)",
+          }}
         />
-      </motion.div>
-    </motion.div>
+      </View>
+    </Animated.View>
   );
 }
 

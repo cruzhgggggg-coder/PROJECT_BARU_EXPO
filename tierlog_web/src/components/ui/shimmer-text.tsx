@@ -1,5 +1,5 @@
 import React from "react";
-import { motion } from "framer-motion";
+import { Platform, Text } from "react-native";
 import { cn } from "@/src/lib/utils";
 
 export function ShimmerText({
@@ -9,6 +9,14 @@ export function ShimmerText({
   children: string;
   className?: string;
 }) {
+  if (Platform.OS === "web") {
+    return <ShimmerTextWeb className={className}>{children}</ShimmerTextWeb>;
+  }
+  return <ShimmerTextNative className={className}>{children}</ShimmerTextNative>;
+}
+
+function ShimmerTextWeb({ children, className }: { children: string; className?: string }) {
+  const { motion } = require("framer-motion");
   return (
     <span
       className={cn(
@@ -39,5 +47,13 @@ export function ShimmerText({
         {children}
       </motion.span>
     </span>
+  );
+}
+
+function ShimmerTextNative({ children, className }: { children: string; className?: string }) {
+  return (
+    <Text className={cn("text-white", className)}>
+      {children}
+    </Text>
   );
 }

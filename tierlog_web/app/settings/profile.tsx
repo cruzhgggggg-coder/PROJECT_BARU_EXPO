@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Text, TextInput, View } from "react-native";
-import { User, CheckCircle, AlertCircle, Cpu } from "lucide-react";
+import { User, CheckCircle, AlertCircle, Cpu } from "lucide-react-native";
 
 import { GlassCard } from "@/src/components/ui/glass-card";
 import { NavBar } from "@/src/components/NavBar";
