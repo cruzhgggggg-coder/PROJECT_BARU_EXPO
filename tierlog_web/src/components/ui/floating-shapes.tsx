@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, View } from "react-native";
+import { Animated, Platform, View } from "react-native";
 import { cn } from "@/src/lib/utils";
 
 type ShapeConfig = {
@@ -39,6 +39,8 @@ function ElegantShape({
   const floatAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    const floatDuration = Platform.OS === "web" ? 6000 : 10000;
+
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 1200, delay, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 2400, delay, useNativeDriver: true }),
@@ -46,8 +48,8 @@ function ElegantShape({
 
     const float = Animated.loop(
       Animated.sequence([
-        Animated.timing(floatAnim, { toValue: 15, duration: 6000, useNativeDriver: true }),
-        Animated.timing(floatAnim, { toValue: 0, duration: 6000, useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 15, duration: floatDuration, useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0, duration: floatDuration, useNativeDriver: true }),
       ])
     );
     const timeout = setTimeout(() => float.start(), delay);
@@ -88,9 +90,11 @@ export function FloatingShapes({
   shapes?: ShapeConfig[];
   className?: string;
 }) {
+  const activeShapes = Platform.OS === "web" ? shapes : shapes.slice(0, 2);
+
   return (
     <View pointerEvents="none" className={cn("absolute inset-0 overflow-hidden", className)}>
-      {shapes.map((shape, i) => (
+      {activeShapes.map((shape, i) => (
         <ElegantShape key={i} {...shape} />
       ))}
     </View>

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Text, TextInput, View } from "react-native";
 import { User, CheckCircle, AlertCircle, Cpu } from "lucide-react-native";
 
 import { GlassCard } from "@/src/components/ui/glass-card";
@@ -7,9 +7,11 @@ import { NavBar } from "@/src/components/NavBar";
 import { RequireAuth } from "@/src/components/RequireAuth";
 import { Button, Field, Heading, Page } from "@/src/components/ui";
 import { useAuth } from "@/src/providers/AuthProvider";
+import { useIsMobile } from "@/src/hooks";
 import type { User as UserType } from "@/src/types";
 
 export default function ProfileScreen() {
+  const isMobile = useIsMobile();
   const { api, user, setUser } = useAuth();
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
@@ -50,9 +52,9 @@ export default function ProfileScreen() {
     }
   };
 
-  return (
+  const content = (
     <RequireAuth>
-      <Page>
+      <Page contentContainerStyle={{ paddingHorizontal: isMobile ? 12 : 24, paddingVertical: isMobile ? 16 : 32 }}>
         <NavBar />
 
         <Heading
@@ -61,14 +63,14 @@ export default function ProfileScreen() {
         />
 
         <View className="mt-3 w-full">
-          <GlassCard className="p-8">
+          <GlassCard className={isMobile ? "p-4" : "p-8"}>
             <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-6">
               <User color="#4F46E5" size={20} />
               <Text className="text-lg font-black tracking-tight text-[#F8FAFC]">Account Information</Text>
             </View>
 
             <View className="gap-2">
-              <View className="flex-row gap-4 flex-wrap">
+              <View className={isMobile ? "flex-col gap-2" : "flex-row gap-4 flex-wrap"}>
                 <View className="flex-1">
                   <Field label="Full Name" value={name} onChangeText={setName} />
                 </View>
@@ -81,7 +83,7 @@ export default function ProfileScreen() {
                 <View className="bg-white/[0.02] border border-white/[0.06] rounded-[18px] p-5 my-3 gap-3.5">
                   <Text className="text-[10px] font-black tracking-[1.5px] text-[#6366F1]">ACADEMIC AFFILIATION (STUDENT)</Text>
                   <View className="gap-2">
-                    <View className="flex-row gap-4 flex-wrap">
+                    <View className={isMobile ? "flex-col gap-2" : "flex-row gap-4 flex-wrap"}>
                       <View className="flex-1">
                         <Field label="Student ID (NIM)" value={nim} onChangeText={setNim} />
                       </View>
@@ -90,7 +92,7 @@ export default function ProfileScreen() {
                       </View>
                     </View>
 
-                    <View className="flex-row gap-4 flex-wrap">
+                    <View className={isMobile ? "flex-col gap-2" : "flex-row gap-4 flex-wrap"}>
                       <View className="flex-[1.5]">
                         <Field label="Thesis / Dissertation Title" value={thesisTitle} onChangeText={setThesisTitle} />
                       </View>
@@ -105,7 +107,7 @@ export default function ProfileScreen() {
                 <View className="bg-white/[0.02] border border-white/[0.06] rounded-[18px] p-5 my-3 gap-3.5">
                   <Text className="text-[10px] font-black tracking-[1.5px] text-[#6366F1]">ACADEMIC AFFILIATION (LECTURER)</Text>
                   <View className="gap-2">
-                    <View className="flex-row gap-4 flex-wrap">
+                    <View className={isMobile ? "flex-col gap-2" : "flex-row gap-4 flex-wrap"}>
                       <View className="flex-1">
                         <Field label="Advisor ID Number (NIP)" value={nip} onChangeText={setNip} />
                       </View>
@@ -114,7 +116,7 @@ export default function ProfileScreen() {
                       </View>
                     </View>
 
-                    <View className="flex-row gap-4 flex-wrap">
+                    <View className={isMobile ? "flex-col gap-2" : "flex-row gap-4 flex-wrap"}>
                       <View className="flex-1">
                         <Field label="Primary Research Domain (Expertise)" value={keahlian} onChangeText={setKeahlian} />
                       </View>
@@ -138,7 +140,7 @@ export default function ProfileScreen() {
                     placeholderTextColor="#475569"
                     multiline
                     numberOfLines={4}
-                    className="text-slate-50 bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5 text-[13px] font-medium leading-[22px] min-h-[100px]"
+                    className={`text-slate-50 bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5 text-[13px] font-medium leading-[22px] ${isMobile ? "min-h-[80px]" : "min-h-[100px]"}`}
                     style={{ textAlignVertical: "top", outlineStyle: "none" } as any}
                   />
                 </View>
@@ -169,4 +171,13 @@ export default function ProfileScreen() {
       </Page>
     </RequireAuth>
   );
+
+  if (Platform.OS !== "web") {
+    return (
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+        {content}
+      </KeyboardAvoidingView>
+    );
+  }
+  return content;
 }

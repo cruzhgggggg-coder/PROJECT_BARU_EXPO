@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import { Text, View, Pressable, Platform } from "react-native";
 import { router } from "expo-router";
 import { Cpu, CheckCircle, Clock, AlertCircle, User, Archive } from "lucide-react-native";
@@ -10,11 +10,12 @@ import { NavBar } from "@/src/components/NavBar";
 import { RequireAuth } from "@/src/components/RequireAuth";
 import { Heading, Page, StatCard, Badge } from "@/src/components/ui";
 import { useAuth } from "@/src/providers/AuthProvider";
-import { API_URL } from "@/src/lib/config";
+import { useWebSocket, useIsMobile } from "@/src/hooks";
 import type { DashboardStats, StudentProfile, ConsultationLog } from "@/src/types";
 
 export default function DashboardScreen() {
   const { api, accessToken, user, booting } = useAuth();
+  const isMobile = useIsMobile();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState("");
   
@@ -27,67 +28,67 @@ export default function DashboardScreen() {
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [consultations, setConsultations] = useState<ConsultationLog[]>([]);
   const [hoveredCard, setHoveredCard] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (booting || !accessToken) return;
     if (user?.role === "lecturer") return;
-    api<DashboardStats>("/dashboard/stats")
-      .then(setStats)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load stats"));
-
-    if (user?.role === "student") {
-      api<{ data: ConsultationLog[] }>("/consultations")
-        .then((res) => setConsultations(res.data))
-        .catch(console.error);
+    try {
+      const [s, c] = await Promise.all([
+        api<DashboardStats>("/dashboard/stats"),
+        user?.role === "student"
+          ? api<{ data: ConsultationLog[] }>("/consultations").then((res) => res.data)
+          : Promise.resolve([] as ConsultationLog[]),
+      ]);
+      setStats(s);
+      setConsultations(c);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load stats");
     }
   }, [api, booting, accessToken, user?.role]);
 
   useEffect(() => {
-    if (!accessToken || consultations.length === 0) {
-      return;
+    if (user?.role === "lecturer") {
+      router.replace("/lecturer-dashboard");
     }
+  }, [user?.role]);
 
-    const socket = new WebSocket(`${API_URL.replace("http", "ws")}/ws`);
-    
-    socket.onopen = () => {
-      socket.send(JSON.stringify({ action: "auth", token: accessToken }));
-      consultations.forEach((log) => {
-        socket.send(JSON.stringify({ action: "subscribe", room: `consultation.${log.id}` }));
-      });
-    };
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-    socket.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data) as { event: string; data: any };
-        if (payload.event === "feedback.status-updated") {
-          setConsultations((current) =>
-            current.map((log) =>
-              log.id !== payload.data.log_id
-                ? log
-                : {
-                    ...log,
-                    feedback_items: log.feedback_items.map((item) =>
-                      item.id === payload.data.feedback_id
-                        ? { ...item, status: payload.data.status, category: payload.data.category ?? item.category }
-                        : item
-                    ),
-                  }
-            )
-          );
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  }, [loadData]);
 
-          api<DashboardStats>("/dashboard/stats")
-            .then(setStats)
-            .catch(console.error);
-        }
-      } catch (err) {
-        console.error("Failed to parse websocket message:", err);
+  const wsRooms = consultations.map((log) => `consultation.${log.id}`);
+
+  useWebSocket({
+    accessToken,
+    rooms: wsRooms,
+    enabled: !!accessToken && consultations.length > 0,
+    onMessage: (payload) => {
+      if (payload.event === "feedback.status-updated") {
+        setConsultations((current) =>
+          current.map((log) =>
+            log.id !== payload.data.log_id
+              ? log
+              : {
+                  ...log,
+                  feedback_items: log.feedback_items.map((item) =>
+                    item.id === payload.data.feedback_id
+                      ? { ...item, status: payload.data.status, category: payload.data.category ?? item.category }
+                      : item
+                  ),
+                }
+          )
+        );
+        api<DashboardStats>("/dashboard/stats").then(setStats).catch(console.warn);
       }
-    };
-
-    return () => {
-      socket.close();
-    };
-  }, [accessToken, consultations.length, api]);
+    },
+  });
 
   const getStudentStatus = (studentId: number) => {
     const studentLogs = consultations.filter(c => c.student_id === studentId);
@@ -104,7 +105,7 @@ export default function DashboardScreen() {
 
   return (
     <RequireAuth>
-      <Page>
+      <Page showFloatingShapes={false} onRefresh={onRefresh} refreshing={refreshing}>
         <MotionDiv variants={fadeIn} initial="hidden" animate="visible" className="relative w-full flex flex-col gap-6">
         <NavBar />
         
@@ -125,66 +126,74 @@ export default function DashboardScreen() {
         ) : null}
 
         <MotionDiv variants={staggerContainer} initial="hidden" animate="visible" className="w-full flex flex-col">
-        <View className="flex-row gap-4 flex-wrap w-full">
+        <View className={`${isMobile ? "flex-col" : "flex-row flex-wrap"} gap-4 w-full`}>
           {user?.role === "student" ? (
             <>
-              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
+              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
               <StatCard 
-                label="Approved Sessions" 
+                label={isMobile ? "Approved" : "Approved Sessions"} 
                 value={stats ? Math.max(0, stats.total_consultations - (stats.pending_feedback > 0 ? 1 : 0)) : "0"} 
                 glowColor="#059669"
+                className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
-              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
+              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
               <StatCard 
-                label="Pending Revisions" 
+                label={isMobile ? "Pending" : "Pending Revisions"} 
                 value={stats?.pending_feedback ?? "0"} 
                 glowColor="#DC2626"
+                className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
-              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
+              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
               <StatCard 
                 label="Completion Rate" 
                 value={stats ? `${stats.completion_rate}%` : "0%"} 
                 glowColor="#6366F1"
+                className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
-              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
+              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
               <StatCard 
-                label="Total Document Drafts" 
+                label={isMobile ? "Total Drafts" : "Total Document Drafts"} 
                 value={stats?.draft_count ?? "0"} 
                 glowColor="#4F46E5"
+                className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
             </>
           ) : (
             <>
-              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
+              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
               <StatCard 
-                label="Total Consultations" 
+                label={isMobile ? "Consultations" : "Total Consultations"} 
                 value={stats?.total_consultations ?? "0"} 
                 glowColor="#4F46E5"
+                className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
-              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
+              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
               <StatCard 
-                label="Validation Queue" 
+                label={isMobile ? "Queue" : "Validation Queue"} 
                 value={stats?.pending_feedback ?? "0"} 
                 glowColor="#D97706"
+                className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
-              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
+              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
               <StatCard 
-                label="Average Completion" 
+                label={isMobile ? "Completion" : "Average Completion"} 
                 value={stats ? `${stats.completion_rate}%` : "0%"} 
                 glowColor="#6366F1"
+                className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
-              <MotionDiv variants={staggerItem} className="flex-1 min-w-[45%] flex">
+              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
               <StatCard 
-                label="Active Students" 
+                label={isMobile ? "Students" : "Active Students"} 
                 value={stats?.student_count ?? "0"} 
                 glowColor="#3B82F6"
+                className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
             </>
@@ -193,7 +202,7 @@ export default function DashboardScreen() {
         </MotionDiv>
 
         {user?.role === "student" ? (
-          <GlassCard className="p-7">
+          <GlassCard className={isMobile ? "p-4" : "p-7"}>
             <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-6">
               <Cpu color="#4F46E5" size={20} />
               <Text className="text-slate-50 text-lg font-black tracking-tight">Active Revision Tasks</Text>
@@ -208,10 +217,13 @@ export default function DashboardScreen() {
 
                   return (
                     <MotionDiv key={item.id} variants={staggerItem}>
-                    <View className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-[18px] gap-3">
+                    <View className={isMobile ? "bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4 gap-3" : "bg-white/[0.02] border border-white/[0.06] rounded-2xl p-[18px] gap-3"}>
                       <View className="flex-row justify-between items-center flex-wrap gap-2.5">
                           <Badge 
-                          text={`${item.category} • ${isFixed ? "SUBMITTED FOR REVIEW" : isValidated ? "APPROVED & VALIDATED" : "PENDING REVISION"}`} 
+                          text={isMobile 
+                            ? `${item.category} • ${isFixed ? "REVIEW" : isValidated ? "APPROVED" : "PENDING"}`
+                            : `${item.category} • ${isFixed ? "SUBMITTED FOR REVIEW" : isValidated ? "APPROVED & VALIDATED" : "PENDING REVISION"}`
+                          } 
                           color={isValidated ? "#059669" : isFixed ? "#0891B2" : "#D97706"} 
                         />
                         <View className="flex-row items-center gap-1.5">
@@ -225,7 +237,10 @@ export default function DashboardScreen() {
                           <Text className={`text-[9px] font-black tracking-widest ${
                             isValidated ? "text-emerald-500" : isFixed ? "text-cyan-500" : "text-amber-500"
                           }`}>
-                            {isValidated ? "APPROVED & VALIDATED" : isFixed ? "Awaiting Validation" : "Pending Execution"}
+                            {isMobile 
+                              ? (isValidated ? "APPROVED" : isFixed ? "AWAITING" : "PENDING")
+                              : (isValidated ? "APPROVED & VALIDATED" : isFixed ? "Awaiting Validation" : "Pending Execution")
+                            }
                           </Text>
                         </View>
                       </View>
@@ -250,19 +265,19 @@ export default function DashboardScreen() {
               <Text className="text-slate-50 text-lg font-black tracking-tight">Active Supervised Students</Text>
             </View>
  
-            <MotionDiv variants={staggerContainer} initial="hidden" animate="visible">
-            <View className="flex-row gap-5 flex-wrap w-full">
+            <MotionDiv variants={staggerContainer} initial="hidden" animate="visible" className="w-full">
+            <View className={`${isMobile ? "flex-col gap-3" : "flex-row flex-wrap gap-5"} w-full`}>
               {students.map((student) => {
                 const status = getStudentStatus(student.id);
                 const isHovered = hoveredCard === student.id;
                 const statusColor = status === "NEW SUBMISSIONS" ? "#0891B2" : status === "ALL CLEAR" ? "#059669" : "#6366F1";
 
                 return (
-                  <MotionDiv key={student.id} variants={staggerItem}>
+                  <MotionDiv key={student.id} variants={staggerItem} className={isMobile ? "w-full" : undefined}>
                   <Pressable
                     onHoverIn={Platform.OS === "web" ? () => setHoveredCard(student.id) : undefined}
                     onHoverOut={Platform.OS === "web" ? () => setHoveredCard(null) : undefined}
-                    className={`flex-1 min-w-[320px] max-w-[48%] rounded-[20px] border border-white/[0.06] gap-3.5 p-[22px] ${
+                    className={`flex-1 ${isMobile ? "w-full" : "min-w-[320px] max-w-[48%]"} rounded-[20px] border border-white/[0.06] gap-3.5 p-[22px] ${
                       isHovered ? "bg-white/[0.06] border-white/[0.12] shadow-[0_0_20px_rgba(99,102,241,0.12)]" : "bg-white/[0.03]"
                     }`}
                     style={({ pressed }) => ({

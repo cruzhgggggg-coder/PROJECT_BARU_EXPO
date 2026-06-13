@@ -1,6 +1,5 @@
-import { useEffect, useRef } from "react"
+﻿import { useEffect, useRef } from "react"
 import { Platform } from "react-native"
-import * as THREE from "three"
 
 /**
  * ShaderAnimation — WebGL shader background for TierLog landing page.
@@ -8,28 +7,20 @@ import * as THREE from "three"
  * Renders an animated abstract light pattern using Three.js fragment shaders.
  * Colors are tuned to the TierLog indigo/violet palette.
  *
- * Usage:
- *   <div className="relative min-h-screen">
- *     <ShaderAnimation />
- *     {/* your content on top *\/}
- *   </div>
- *
  * NOTE: This component uses WebGL and only works on web.
  * On native platforms it renders nothing.
+ * Three.js is dynamically required only on web to avoid bundling on native.
  */
 export function ShaderAnimation() {
   const containerRef = useRef<HTMLDivElement>(null)
-  const sceneRef = useRef<{
-    camera: THREE.Camera
-    scene: THREE.Scene
-    renderer: THREE.WebGLRenderer
-    uniforms: any
-    animationId: number
-  } | null>(null)
+  const sceneRef = useRef<any>(null)
 
   useEffect(() => {
     if (Platform.OS !== "web") return
     if (!containerRef.current) return
+
+    // Dynamic require — Three.js only loads on web, never bundled for native
+    const THREE = require("three")
 
     const container = containerRef.current
 
@@ -39,10 +30,6 @@ export function ShaderAnimation() {
       }
     `
 
-    // TierLog indigo/violet palette:
-    //   R=0.45  G=0.25  B=1.0  → pushes towards indigo/violet
-    //   Overall brightness 0.55 for subtle background
-    //   Vignette darkens edges
     const fragmentShader = `
       #define TWO_PI 6.2831853072
       #define PI 3.14159265359

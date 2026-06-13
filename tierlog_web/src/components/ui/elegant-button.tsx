@@ -2,6 +2,10 @@ import React from "react";
 import { Platform, Pressable, Text } from "react-native";
 import { cn } from "@/src/lib/utils";
 
+if (Platform.OS !== "web") {
+  var Haptics = require("expo-haptics");
+}
+
 type ButtonTone = "primary" | "secondary" | "danger" | "success" | "warning";
 type ButtonSize = "sm" | "md" | "lg";
 
@@ -73,7 +77,16 @@ export function ElegantButton({
 
   return (
     <Pressable
-      onPress={disabled ? undefined : onPress}
+      onPress={
+        disabled
+          ? undefined
+          : () => {
+              if (Platform.OS !== "web") {
+                Haptics.selectionAsync();
+              }
+              onPress?.();
+            }
+      }
       disabled={disabled}
       className={cn(
         "items-center justify-center border w-full",

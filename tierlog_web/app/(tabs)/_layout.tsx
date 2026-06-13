@@ -1,5 +1,6 @@
 import React from "react";
 import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Tabs } from "expo-router";
 import { LayoutDashboard, MessageSquare, Archive, Settings } from "lucide-react-native";
 
@@ -8,6 +9,8 @@ import { LayoutDashboard, MessageSquare, Archive, Settings } from "lucide-react-
  * On web, this layout is bypassed — the NavBar component handles navigation.
  */
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+
   // On web, we skip the tabs layout entirely
   if (Platform.OS === "web") {
     return null;
@@ -21,8 +24,8 @@ export default function TabsLayout() {
           backgroundColor: "#0F172A",
           borderTopColor: "rgba(255,255,255,0.08)",
           borderTopWidth: 1,
-          height: 64,
-          paddingBottom: 8,
+          height: 64 + insets.bottom,
+          paddingBottom: 8 + insets.bottom,
           paddingTop: 8,
         },
         tabBarActiveTintColor: "#6366F1",

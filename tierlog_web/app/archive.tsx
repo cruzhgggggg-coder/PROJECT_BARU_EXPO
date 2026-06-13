@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Text, View, ScrollView, Pressable, Platform, Linking, Image } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { BackHandler, Text, View, ScrollView, Pressable, Platform, Linking, Image } from "react-native";
 import { MotionDiv } from "@/src/lib/motion";
 import { staggerContainer, staggerItem } from "@/src/lib/animations";
 import { Archive, AlertCircle, CheckCircle, Clock, User, ChevronDown, ChevronRight } from "lucide-react-native";
@@ -9,6 +9,7 @@ import { NavBar } from "@/src/components/NavBar";
 import { RequireAuth } from "@/src/components/RequireAuth";
 import { Heading, Page, Badge } from "@/src/components/ui";
 import { useAuth } from "@/src/providers/AuthProvider";
+import { useIsMobile } from "@/src/hooks";
 import type { ConsultationLog, StudentProfile } from "@/src/types";
 import { API_URL } from "@/src/lib/config";
 
@@ -23,6 +24,8 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
   const feedbackCount = log.feedback_items?.length ?? 0;
   const validatedCount = log.feedback_items?.filter((f) => f.status === "Validated").length ?? 0;
 
+  const isMobile = useIsMobile();
+
   return (
     <View className="relative pl-9">
       {/* Timeline dot */}
@@ -31,7 +34,7 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
         style={{ backgroundColor: statusColor, shadowColor: statusColor, elevation: 4, boxShadow: Platform.OS === "web" ? "0 0 8px currentColor" : undefined } as any}
       />
 
-      <GlassCard className="p-[22px] gap-4">
+      <GlassCard className={isMobile ? "p-4 gap-4" : "p-[22px] gap-4"}>
         {/* Header: session info + expand toggle */}
         <Pressable
           onPress={() => setExpanded(!expanded)}
@@ -103,7 +106,7 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
             <View className="flex-row gap-2 border-b border-white/[0.08] pb-2">
               <Pressable
                 onPress={() => setActiveTab("feedback")}
-                className={`flex-1 py-2 rounded-lg items-center justify-center border border-transparent ${
+                className={`flex-1 py-2.5 rounded-lg items-center justify-center border border-transparent ${
                   activeTab === "feedback"
                     ? "bg-[#6366F1] border-[rgba(99,102,241,0.1)] shadow-[0_4px_12px_rgba(99,102,241,0.15)]"
                     : "bg-transparent"
@@ -115,7 +118,7 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
               </Pressable>
               <Pressable
                 onPress={() => setActiveTab("transcript")}
-                className={`flex-1 py-2 rounded-lg items-center justify-center border border-transparent ${
+                className={`flex-1 py-2.5 rounded-lg items-center justify-center border border-transparent ${
                   activeTab === "transcript"
                     ? "bg-[#6366F1] border-[rgba(99,102,241,0.1)] shadow-[0_4px_12px_rgba(99,102,241,0.15)]"
                     : "bg-transparent"
@@ -128,7 +131,7 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
               {annotationCount > 0 && (
                 <Pressable
                   onPress={() => setActiveTab("annotations")}
-                  className={`flex-1 py-2 rounded-lg items-center justify-center border ${
+                  className={`flex-1 py-2.5 rounded-lg items-center justify-center border ${
                     activeTab === "annotations"
                       ? "bg-[rgba(99,102,241,0.08)] border-[rgba(99,102,241,0.25)]"
                       : "bg-transparent border-transparent"
@@ -166,7 +169,7 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
                           </View>
                           {item.fix_proof_text ? (
                             <View className="ml-4 bg-emerald-500/[0.04] border border-emerald-500/[0.12] rounded-lg p-2 gap-1">
-                              <Text className="text-emerald-500 text-[8px] font-black tracking-[1.5px]">FIX DESCRIPTION</Text>
+                              <Text className="text-emerald-500 text-[10px] font-black tracking-[1.5px]">FIX DESCRIPTION</Text>
                               <Text className="text-[#CBD5E1] text-[11px] font-medium" style={{ lineHeight: 16 }}>
                                 {item.fix_proof_text}
                               </Text>
@@ -184,9 +187,10 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
                 )}
               </View>
             ) : activeTab === "transcript" ? (
-              <ScrollView
-                showsVerticalScrollIndicator={true}
-                className="h-[180px] bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5 ultra-thin-scroll"
+                  <ScrollView
+                    nestedScrollEnabled={true}
+                    showsVerticalScrollIndicator={true}
+                    className="h-[180px] bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5 ultra-thin-scroll"
                 style={{ outlineStyle: "none" } as any}
               >
                 <Text className="text-[13px] leading-[22px] font-medium text-[#CBD5E1]">
@@ -194,9 +198,10 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
                 </Text>
               </ScrollView>
             ) : (
-              <ScrollView
-                showsVerticalScrollIndicator={true}
-                className="max-h-[320px] ultra-thin-scroll"
+                <ScrollView
+                    nestedScrollEnabled={true}
+                    showsVerticalScrollIndicator={true}
+                    className="max-h-[320px] ultra-thin-scroll"
               >
                 <View className="gap-3">
                   {(log.revision_annotations ?? []).map((ann, idx) => (
@@ -219,12 +224,12 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
                             onError={(e: any) => { e.target.style.display = "none"; }}
                           />
                         ) : (
-                          <Image source={{ uri: `${API_URL}/storage/annotations/${ann.filename}` }} style={{ width: "100%", height: 160, borderRadius: 8, opacity: 0.92 }} resizeMode="cover" />
+                          <Image source={{ uri: `${API_URL}/storage/annotations/${ann.filename}`, headers: { "Cache-Control": "max-age=3600" } }} style={{ width: "100%", height: 160, borderRadius: 8, opacity: 0.92, backgroundColor: "rgba(99,102,241,0.1)" }} resizeMode="cover" />
                         )
                       )}
                       <View className="bg-white/[0.02] border border-white/[0.04] rounded-[10px] p-2.5 gap-1">
                         <Text className="text-[9px] font-black tracking-[1.5px] text-[#6366F1]">EXTRACTED CONTENT</Text>
-                        <ScrollView showsVerticalScrollIndicator className="max-h-[100px] ultra-thin-scroll">
+                        <ScrollView showsVerticalScrollIndicator nestedScrollEnabled={true} className="max-h-[100px] ultra-thin-scroll">
                           <Text className="text-[12px] leading-5 font-normal text-[#CBD5E1]">
                             {ann.extracted_text || "(No text extracted)"}
                           </Text>
@@ -307,28 +312,49 @@ function StudentCard({
 
 // ─── Main Archive Screen ──────────────────────────────────────
 export default function ArchiveScreen() {
+  const isMobile = useIsMobile();
   const { api, accessToken, booting, user } = useAuth();
   const [logs, setLogs] = useState<ConsultationLog[]>([]);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"all" | "validated" | "pending">("all");
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
+  const [mobileRosterOpen, setMobileRosterOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const isLecturer = user?.role === "lecturer";
 
-  useEffect(() => {
+  const loadLogs = useCallback(async () => {
     if (booting || !accessToken) return;
-
-    api<{ data: ConsultationLog[] }>("/logs")
-      .then((response) => {
-        setLogs(response.data);
-        // Auto-select first student for lecturers
-        if (isLecturer && response.data.length > 0) {
-          const firstStudentId = response.data[0]?.student_id;
-          if (firstStudentId) setSelectedStudentId(firstStudentId);
-        }
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load archive"));
+    try {
+      const response = await api<{ data: ConsultationLog[] }>("/logs");
+      setLogs(response.data);
+      if (isLecturer && response.data.length > 0) {
+        const firstStudentId = response.data[0]?.student_id;
+        if (firstStudentId) setSelectedStudentId(firstStudentId);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load archive");
+    }
   }, [api, booting, accessToken, isLecturer]);
+
+  useEffect(() => {
+    if (!mobileRosterOpen) return;
+    const handler = BackHandler.addEventListener("hardwareBackPress", () => {
+      setMobileRosterOpen(false);
+      return true;
+    });
+    return () => handler.remove();
+  }, [mobileRosterOpen]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadLogs();
+    setRefreshing(false);
+  }, [loadLogs]);
 
   // ── Extract unique students from logs (lecturer only) ──
   const students = useMemo(() => {
@@ -387,7 +413,13 @@ export default function ArchiveScreen() {
 
   return (
     <RequireAuth>
-      <Page>
+      <Page
+        showFloatingShapes={false}
+        onRefresh={onRefresh}
+        refreshing={refreshing}
+        scrollable={!isMobile}
+        contentContainerStyle={{ paddingHorizontal: isMobile ? 12 : 24, paddingVertical: isMobile ? 16 : 32 }}
+      >
         <NavBar />
 
         <Heading
@@ -410,64 +442,127 @@ export default function ArchiveScreen() {
           /* ══════════════════════════════════════════════════════════
              LECTURER VIEW: Student Sidebar + Grouped Timeline
              ══════════════════════════════════════════════════════════ */
-          <View className="flex-row gap-5 items-start">
+          <View className={isMobile ? "flex-col flex-1 min-h-0 gap-4" : "flex-row gap-5 items-start"}>
             {/* Left Panel: Student Roster */}
-            <GlassCard className="w-[320px] min-w-[280px] p-6 shrink-0 h-[700px]">
-              <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-5">
-                <User color="#4F46E5" size={18} />
-                <Text className="text-slate-50 text-base font-black tracking-tight">Student Roster</Text>
-              </View>
+            {!isMobile ? (
+              <GlassCard className="w-[320px] min-w-[280px] p-6 shrink-0 h-[700px]">
+                <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-5">
+                  <User color="#4F46E5" size={18} />
+                  <Text className="text-slate-50 text-base font-black tracking-tight">Student Roster</Text>
+                </View>
 
-              <ScrollView
-                showsVerticalScrollIndicator={true}
-                className="flex-1"
-                {...({ className: "ultra-thin-scroll" } as any)}
-                contentContainerStyle={{ gap: 10 }}
-              >
-                {students.length === 0 ? (
-                  <View className="py-10 items-center justify-center gap-3">
-                    <User color="#64748B" size={28} />
-                    <Text className="text-slate-500 text-[13px] font-semibold text-center">No students with consultation sessions.</Text>
+                <ScrollView
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={true}
+                  className="flex-1"
+                  {...({ className: "ultra-thin-scroll" } as any)}
+                  contentContainerStyle={{ gap: 10 }}
+                >
+                  {students.length === 0 ? (
+                    <View className="py-10 items-center justify-center gap-3">
+                      <User color="#64748B" size={28} />
+                      <Text className="text-slate-500 text-[13px] font-semibold text-center">No students with consultation sessions.</Text>
+                    </View>
+                  ) : (
+                    students.map((student) => {
+                      const stats = studentStats[student.id] || { sessions: 0, validated: 0, pending: 0 };
+                      return (
+                        <StudentCard
+                          key={student.id}
+                          student={student}
+                          sessionCount={stats.sessions}
+                          validatedCount={stats.validated}
+                          pendingCount={stats.pending}
+                          isSelected={selectedStudentId === student.id}
+                          onPress={() => {
+                            setSelectedStudentId(student.id);
+                            setFilter("all");
+                          }}
+                        />
+                      );
+                    })
+                  )}
+                </ScrollView>
+              </GlassCard>
+            ) : (
+              <GlassCard className="p-4">
+                <Pressable
+                  onPress={() => setMobileRosterOpen(!mobileRosterOpen)}
+                  className="flex-row items-center justify-between"
+                  style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+                >
+                  <View className="flex-row items-center gap-2.5">
+                    <User color="#4F46E5" size={18} />
+                    <Text className="text-slate-50 text-base font-black tracking-tight">Student Roster</Text>
+                    {selectedStudent && (
+                      <Text className="text-slate-400 text-xs font-semibold" numberOfLines={1}>
+                        — {selectedStudent.name}
+                      </Text>
+                    )}
                   </View>
-                ) : (
-                  students.map((student) => {
-                    const stats = studentStats[student.id] || { sessions: 0, validated: 0, pending: 0 };
-                    return (
-                      <StudentCard
-                        key={student.id}
-                        student={student}
-                        sessionCount={stats.sessions}
-                        validatedCount={stats.validated}
-                        pendingCount={stats.pending}
-                        isSelected={selectedStudentId === student.id}
-                        onPress={() => {
-                          setSelectedStudentId(student.id);
-                          setFilter("all");
-                        }}
-                      />
-                    );
-                  })
+                  {mobileRosterOpen ? (
+                    <ChevronDown color="#94A3B8" size={18} />
+                  ) : (
+                    <ChevronRight color="#94A3B8" size={18} />
+                  )}
+                </Pressable>
+
+                {mobileRosterOpen && (
+                  <ScrollView
+                    nestedScrollEnabled={true}
+                    showsVerticalScrollIndicator={true}
+                    className="mt-4 max-h-[400px]"
+                    contentContainerStyle={{ gap: 10 }}
+                  >
+                    {students.length === 0 ? (
+                      <View className="py-10 items-center justify-center gap-3">
+                        <User color="#64748B" size={28} />
+                        <Text className="text-slate-500 text-[13px] font-semibold text-center">No students with consultation sessions.</Text>
+                      </View>
+                    ) : (
+                      students.map((student) => {
+                        const stats = studentStats[student.id] || { sessions: 0, validated: 0, pending: 0 };
+                        return (
+                          <StudentCard
+                            key={student.id}
+                            student={student}
+                            sessionCount={stats.sessions}
+                            validatedCount={stats.validated}
+                            pendingCount={stats.pending}
+                            isSelected={selectedStudentId === student.id}
+                            onPress={() => {
+                              setSelectedStudentId(student.id);
+                              setFilter("all");
+                              setMobileRosterOpen(false);
+                            }}
+                          />
+                        );
+                      })
+                    )}
+                  </ScrollView>
                 )}
-              </ScrollView>
-            </GlassCard>
+              </GlassCard>
+            )}
 
             {/* Right Panel: Student Timeline */}
             <View className="flex-1 gap-4 min-w-0">
               {/* Student Header */}
               {selectedStudent && (
                 <GlassCard className="p-5">
-                  <View className="flex-row items-center gap-3.5">
-                    <View className="w-[42px] h-[42px] rounded-full bg-indigo-500/[0.06] border border-indigo-500/[0.15] items-center justify-center">
-                      <User color="#6366F1" size={22} />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-slate-50 text-lg font-black tracking-tight">{selectedStudent.name}</Text>
-                      <Text className="text-slate-400 text-xs font-semibold mt-0.5">
-                        NIM: {selectedStudent.nim} · {selectedStudent.prodi}
-                      </Text>
+                  <View className={`gap-3.5 ${isMobile ? "flex-col items-stretch" : "flex-row items-center"}`}>
+                    <View className="flex-row items-center gap-3.5">
+                      <View className="w-[42px] h-[42px] rounded-full bg-indigo-500/[0.06] border border-indigo-500/[0.15] items-center justify-center">
+                        <User color="#6366F1" size={22} />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-slate-50 text-lg font-black tracking-tight">{selectedStudent.name}</Text>
+                        <Text className="text-slate-400 text-xs font-semibold mt-0.5">
+                          NIM: {selectedStudent.nim} · {selectedStudent.prodi}
+                        </Text>
+                      </View>
                     </View>
                     {selectedStudent.thesis_title && (
-                      <View className="flex-1 mr-2.5 bg-white/[0.02] p-3 rounded-xl border border-white/[0.04]">
+                      <View className={`${isMobile ? "w-full" : "flex-1 mr-2.5"} bg-white/[0.02] p-3 rounded-xl border border-white/[0.04]`}>
                         <Text className="text-slate-400 text-[9px] font-extrabold tracking-widest uppercase mb-0.5">THESIS TITLE</Text>
                         <Text className="text-slate-300 text-xs font-semibold" numberOfLines={2}>{selectedStudent.thesis_title}</Text>
                       </View>
@@ -489,7 +584,7 @@ export default function ArchiveScreen() {
                     <Pressable
                       key={f}
                       onPress={() => setFilter(f)}
-                      className={`py-2 px-4 rounded-full border transition-all ${
+                      className={`py-3 px-4 rounded-full border transition-all ${
                         filter === f
                           ? "bg-[#6366F1] border-[#6366F1]"
                           : "bg-white/[0.02] border-white/[0.06]"
@@ -505,7 +600,7 @@ export default function ArchiveScreen() {
               </View>
 
               {/* Timeline */}
-              <GlassCard className="p-7">
+              <GlassCard className={isMobile ? "p-4" : "p-7"}>
                 <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-7">
                   <Archive color="#4F46E5" size={20} />
                   <Text className="text-xl font-black tracking-tight text-[#F8FAFC]">Consultation Timeline</Text>
@@ -554,7 +649,7 @@ export default function ArchiveScreen() {
                   <Pressable
                     key={f}
                     onPress={() => setFilter(f)}
-                    className={`py-2.5 px-[18px] rounded-full border ${
+                    className={`py-3 px-4 rounded-full border ${
                       filter === f
                         ? "bg-[#6366F1] border-[#6366F1]"
                         : "bg-white/[0.02] border-white/[0.06]"
@@ -570,7 +665,7 @@ export default function ArchiveScreen() {
             </View>
 
             {/* Timeline */}
-            <GlassCard className="p-7">
+            <GlassCard className={isMobile ? "p-4" : "p-7"}>
               <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-7">
                 <Archive color="#4F46E5" size={20} />
                 <Text className="text-xl font-black tracking-tight text-[#F8FAFC]">My Consultation History</Text>

@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { ScrollView, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 
 type Props = { children: React.ReactNode };
 type State = { hasError: boolean; error: Error | null };
@@ -15,28 +16,86 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("ErrorBoundary caught:", error, errorInfo);
+    console.warn("ErrorBoundary caught:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
-      return (
-        <View style={{ flex: 1, backgroundColor: "#020617", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <Text style={{ color: "#F8FAFC", fontSize: 20, fontWeight: "800", marginBottom: 12 }}>
-            Something went wrong
-          </Text>
-          <Text style={{ color: "#94A3B8", fontSize: 14, textAlign: "center", marginBottom: 24, lineHeight: 22 }}>
-            {this.state.error?.message || "An unexpected error occurred."}
-          </Text>
-          <Text
-            onPress={() => this.setState({ hasError: false, error: null })}
-            style={{ color: "#6366F1", fontSize: 14, fontWeight: "700" }}
-          >
-            Try Again
-          </Text>
-        </View>
-      );
+      return <ErrorFallback error={this.state.error} onReset={() => this.setState({ hasError: false, error: null })} />;
     }
     return this.props.children;
   }
+}
+
+function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () => void }) {
+  const router = useRouter();
+
+  return (
+    <ScrollView
+      contentContainerStyle={{
+        flexGrow: 1,
+        backgroundColor: "#020617",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+      }}
+    >
+      <View style={{ alignItems: "center", gap: 12, maxWidth: 400 }}>
+        <Text style={{ color: "#F8FAFC", fontSize: 20, fontWeight: "800", marginBottom: 4 }}>
+          Something went wrong
+        </Text>
+        <ScrollView
+          style={{
+            maxHeight: 160,
+            width: "100%",
+            backgroundColor: "rgba(255,255,255,0.03)",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.06)",
+            padding: 12,
+          }}
+          nestedScrollEnabled
+        >
+          <Text style={{ color: "#94A3B8", fontSize: 13, textAlign: "center", lineHeight: 20 }}>
+            {error?.message || "An unexpected error occurred."}
+          </Text>
+        </ScrollView>
+
+        <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
+          <Text
+            onPress={onReset}
+            style={{
+              color: "#F8FAFC",
+              fontSize: 14,
+              fontWeight: "700",
+              backgroundColor: "#4F46E5",
+              paddingHorizontal: 20,
+              paddingVertical: 12,
+              borderRadius: 12,
+              overflow: "hidden",
+            }}
+          >
+            Try Again
+          </Text>
+          <Text
+            onPress={() => router.replace("/")}
+            style={{
+              color: "#F8FAFC",
+              fontSize: 14,
+              fontWeight: "700",
+              backgroundColor: "rgba(255,255,255,0.06)",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.08)",
+              paddingHorizontal: 20,
+              paddingVertical: 12,
+              borderRadius: 12,
+              overflow: "hidden",
+            }}
+          >
+            Go Home
+          </Text>
+        </View>
+      </View>
+    </ScrollView>
+  );
 }

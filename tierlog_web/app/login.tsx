@@ -10,9 +10,11 @@ import { GlassCard } from "@/src/components/ui/glass-card";
 import { ElegantButton } from "@/src/components/ui/elegant-button";
 import { AuthPageLayout } from "@/src/components/ui/auth-page-layout";
 import { Cpu } from "lucide-react-native";
+import { useIsMobile } from "@/src/hooks";
 
 export default function LoginScreen() {
   const { login, user } = useAuth();
+  const isMobile = useIsMobile();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -70,7 +72,7 @@ export default function LoginScreen() {
         </>
       }
       rightContent={
-        <GlassCard className="p-8">
+        <GlassCard className={isMobile ? "p-5" : "p-8"}>
           <Text className="text-xl font-black tracking-tight text-white mb-1">
             User Authentication
           </Text>
@@ -122,9 +124,12 @@ export default function LoginScreen() {
     />
   );
 
-  if (RNPlatform.OS !== "web") {
+  if (isMobile) {
     return (
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+        behavior={RNPlatform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
+      >
         {content}
       </KeyboardAvoidingView>
     );

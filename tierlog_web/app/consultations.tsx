@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, Image, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Animated, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { NavBar } from "@/src/components/NavBar";
 import { RequireAuth } from "@/src/components/RequireAuth";
@@ -9,6 +9,7 @@ import { GlassCard } from "@/src/components/ui/glass-card";
 import { Badge, Button, Heading, Page } from "@/src/components/ui";
 import { API_URL } from "@/src/lib/config";
 import { useAuth } from "@/src/providers/AuthProvider";
+import { useWebSocket, useIsMobile } from "@/src/hooks";
 import type { ConsultationLog, FeedbackItem, RevisionAnnotation } from "@/src/types";
 import {
   CloudUpload,
@@ -19,6 +20,10 @@ import {
   AlertCircle,
   ChevronRight,
 } from "lucide-react-native";
+
+if (Platform.OS !== "web") {
+  var Haptics = require("expo-haptics");
+}
 
 type ChatMessage = {
   role: string;
@@ -103,6 +108,7 @@ const TypingIndicator = ({ label = "AI THINKING", color = "#7C3AED" }: TypingInd
 
 export default function ConsultationsScreen() {
   const { api, accessToken, user, booting } = useAuth();
+  const isMobile = useIsMobile(1024);
   const [logs, setLogs] = useState<ConsultationLog[]>([]);
   const [selectedLog, setSelectedLog] = useState<ConsultationLog | null>(null);
 
@@ -139,6 +145,8 @@ export default function ConsultationsScreen() {
   const [annotationFiles, setAnnotationFiles] = useState<File[]>([]);
   const [studentTab, setStudentTab] = useState<"feedback" | "transcript" | "annotations" | "drafts">("feedback");
   const [showArchiveDropdown, setShowArchiveDropdown] = useState(false);
+  const [mobileStudentPanel, setMobileStudentPanel] = useState<"upload" | "feedback" | "chat">("upload");
+  const [mobileLecturerPanel, setMobileLecturerPanel] = useState<"queue" | "transcript" | "validation">("queue");
 
   const [chatQuery, setChatQuery] = useState("");
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -149,7 +157,6 @@ export default function ConsultationsScreen() {
   const [loading, setLoading] = useState(false);
   const [classifying, setClassifying] = useState(false);
   const [error, setError] = useState("");
-  const socketRef = useRef<WebSocket | null>(null);
   const chatScrollRef = useRef<ScrollView | null>(null);
 
   const [selectedFeedbackItem, setSelectedFeedbackItem] = useState<FeedbackItem | null>(null);
@@ -170,6 +177,25 @@ export default function ConsultationsScreen() {
   // Fix proof text state
   const [fixingFeedbackId, setFixingFeedbackId] = useState<number | null>(null);
   const [fixProofText, setFixProofText] = useState("");
+
+  // Collapsible comments state
+  const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
+
+  const toggleComments = (itemId: number) => {
+    setExpandedComments(prev => {
+      const isCurrentlyExpanded = !!prev[itemId];
+      const nextVal = !isCurrentlyExpanded;
+      if (nextVal) {
+        setCommentingOnFeedbackId(itemId);
+      } else {
+        if (commentingOnFeedbackId === itemId) {
+          setCommentingOnFeedbackId(null);
+          setCommentText("");
+        }
+      }
+      return { ...prev, [itemId]: nextVal };
+    });
+  };
 
   const getMeetingNumber = (logId: number, studentId: number) => {
     const studentLogs = logs
@@ -220,7 +246,7 @@ export default function ConsultationsScreen() {
       const res = await api<{ data: any[] }>(`/consultations/${logId}/direct-messages`);
       setDirectMessages(res.data);
     } catch (err) {
-      console.error("Failed to load direct messages:", err);
+      console.warn("Failed to load direct messages:", err);
     }
   };
 
@@ -233,7 +259,7 @@ export default function ConsultationsScreen() {
       }));
       setChatHistory(mapped);
     } catch (err) {
-      console.error("Failed to load AI chats:", err);
+      console.warn("Failed to load AI chats:", err);
     }
   };
 
@@ -246,126 +272,105 @@ export default function ConsultationsScreen() {
     void loadAIChats(selectedLog.id);
   }, [accessToken, selectedLog?.id]);
 
-  useEffect(() => {
-    if (!accessToken || logs.length === 0) return;
+  const wsRooms = logs.map((log) => `consultation.${log.id}`);
 
-    socketRef.current?.close();
-
-    const socket = new WebSocket(`${API_URL.replace("http", "ws")}/ws`);
-    socketRef.current = socket;
-
-    socket.onopen = () => {
-      socket.send(JSON.stringify({ action: "auth", token: accessToken }));
-      logs.forEach((log) => {
-        socket.send(JSON.stringify({ action: "subscribe", room: `consultation.${log.id}` }));
-      });
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data) as { event: string; data: any };
-
-        if (payload.event === "feedback.new") {
-          const newItem = payload.data;
-          setLogs((current) =>
-            current.map((log) =>
-              log.id !== newItem.log_id
-                ? log
-                : {
-                    ...log,
-                    feedback_items: [
-                      ...(log.feedback_items ?? []),
-                      {
-                        id: newItem.id ?? newItem.feedback_id,
-                        consultation_log_id: newItem.log_id,
-                        content: newItem.content,
-                        category: newItem.category,
-                        status: newItem.status,
-                        created_at: newItem.created_at ?? new Date().toISOString(),
-                        updated_at: newItem.created_at ?? new Date().toISOString(),
-                      } as any,
-                    ],
-                  }
-            )
-          );
-          showToast(
-            "New Revision Dispatched",
-            `Your advisor added a new revision item: "${newItem.content}".`,
-            "revision"
-          );
-        }
-
-        if (payload.event === "feedback.status-updated") {
-          setLogs((current) =>
-            current.map((log) =>
-              log.id !== payload.data.log_id
-                ? log
-                : {
-                    ...log,
-                    feedback_items: (log.feedback_items ?? []).map((item) =>
-                      item.id === payload.data.feedback_id
-                        ? { ...item, status: payload.data.status, category: payload.data.category ?? item.category }
-                        : item
-                    ),
-                  }
-            )
-          );
-          const status = payload.data.status;
-          const msgTitle = status === "Validated" ? "Revision Approved!" : "Revision Status Updated";
-          const msgText =
-            status === "Validated"
-              ? "A revision feedback has been successfully validated and approved by your advisor."
-              : `A revision feedback status was changed to "${status}".`;
-          showToast(msgTitle, msgText, "revision");
-        }
-
-        if (payload.event === "chat.message") {
-          appendChat({ role: payload.data.role, content: payload.data.content });
-        }
-
-        if (payload.event === "chat.direct-message") {
-          setDirectMessages((current) => {
-            if (current.some((m) => m.id === payload.data.id)) return current;
-            return [...current, payload.data];
-          });
-          if (payload.data.sender_role === "lecturer") {
-            showToast("New Message from Advisor", payload.data.content, "chat");
-          }
-        }
-
-        if (payload.event === "feedback.comment") {
-          const newComment = payload.data;
-          setLogs((current) =>
-            current.map((log) =>
-              log.id !== newComment.log_id
-                ? log
-                : {
-                    ...log,
-                    feedback_items: (log.feedback_items ?? []).map((f) =>
-                      f.id === newComment.feedback_id
-                        ? {
-                            ...f,
-                            comments: (f.comments ?? []).some((c: any) => c.id === newComment.id)
-                              ? f.comments
-                              : [...(f.comments ?? []), newComment],
-                          }
-                        : f
-                    ),
-                  }
-            )
-          );
-        }
-      } catch (e) {
-        console.error("[WS] parse error:", e);
+  useWebSocket({
+    accessToken,
+    rooms: wsRooms,
+    enabled: !!accessToken && logs.length > 0,
+    onMessage: (payload) => {
+      if (payload.event === "feedback.new") {
+        const newItem = payload.data;
+        setLogs((current) =>
+          current.map((log) =>
+            log.id !== newItem.log_id
+              ? log
+              : {
+                  ...log,
+                  feedback_items: [
+                    ...(log.feedback_items ?? []),
+                    {
+                      id: newItem.id ?? newItem.feedback_id,
+                      consultation_log_id: newItem.log_id,
+                      content: newItem.content,
+                      category: newItem.category,
+                      status: newItem.status,
+                      created_at: newItem.created_at ?? new Date().toISOString(),
+                      updated_at: newItem.created_at ?? new Date().toISOString(),
+                    } as any,
+                  ],
+                }
+          )
+        );
+        showToast(
+          "New Revision Dispatched",
+          `Your advisor added a new revision item: "${newItem.content}".`,
+          "revision"
+        );
       }
-    };
 
-    socket.onerror = (e) => console.error("[WS] error:", e);
+      if (payload.event === "feedback.status-updated") {
+        setLogs((current) =>
+          current.map((log) =>
+            log.id !== payload.data.log_id
+              ? log
+              : {
+                  ...log,
+                  feedback_items: (log.feedback_items ?? []).map((item) =>
+                    item.id === payload.data.feedback_id
+                      ? { ...item, status: payload.data.status, category: payload.data.category ?? item.category }
+                      : item
+                  ),
+                }
+          )
+        );
+        const status = payload.data.status;
+        const msgTitle = status === "Validated" ? "Revision Approved!" : "Revision Status Updated";
+        const msgText =
+          status === "Validated"
+            ? "A revision feedback has been successfully validated and approved by your advisor."
+            : `A revision feedback status was changed to "${status}".`;
+        showToast(msgTitle, msgText, "revision");
+      }
 
-    return () => {
-      socket.close();
-    };
-  }, [accessToken, logs.length]);
+      if (payload.event === "chat.message") {
+        appendChat({ role: payload.data.role, content: payload.data.content });
+      }
+
+      if (payload.event === "chat.direct-message") {
+        setDirectMessages((current) => {
+          if (current.some((m) => m.id === payload.data.id)) return current;
+          return [...current, payload.data];
+        });
+        if (payload.data.sender_role === "lecturer") {
+          showToast("New Message from Advisor", payload.data.content, "chat");
+        }
+      }
+
+      if (payload.event === "feedback.comment") {
+        const newComment = payload.data;
+        setLogs((current) =>
+          current.map((log) =>
+            log.id !== newComment.log_id
+              ? log
+              : {
+                  ...log,
+                  feedback_items: (log.feedback_items ?? []).map((f) =>
+                    f.id === newComment.feedback_id
+                      ? {
+                          ...f,
+                          comments: (f.comments ?? []).some((c: any) => c.id === newComment.id)
+                            ? f.comments
+                            : [...(f.comments ?? []), newComment],
+                        }
+                      : f
+                  ),
+                }
+          )
+        );
+      }
+    },
+  });
 
   useEffect(() => {
     setTimeout(() => {
@@ -403,6 +408,9 @@ export default function ConsultationsScreen() {
       body.append("audio", audioFile);
       annotationFiles.forEach((f) => body.append("annotations", f));
       await api("/consultations", { method: "POST", body, headers: {} });
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
       setPaperFile(null);
       setAudioFile(null);
       setAnnotationFiles([]);
@@ -432,6 +440,9 @@ export default function ConsultationsScreen() {
           body: JSON.stringify({ log_id: selected.id, query: draft }),
         });
         appendChat({ role: "ai", content: response.ai_response });
+        if (Platform.OS !== "web") {
+          Haptics.selectionAsync();
+        }
         showToast("AI Oracle Response Ready", "The AI has compiled a response for your revision guidelines.", "system");
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : "AI Oracle failed to respond";
@@ -450,6 +461,9 @@ export default function ConsultationsScreen() {
           if (current.some((m) => m.id === response.data.id)) return current;
           return [...current, response.data];
         });
+        if (Platform.OS !== "web") {
+          Haptics.selectionAsync();
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to send message to advisor");
       } finally {
@@ -502,6 +516,9 @@ export default function ConsultationsScreen() {
         method: "PUT",
         body: JSON.stringify({ status, log_id: selected?.id, fix_proof_text: proofText || "" }),
       });
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
       await loadLogs();
       if (selectedFeedbackItem && selectedFeedbackItem.id === item.id) {
         setSelectedFeedbackItem(prev => prev ? { ...prev, status, fix_proof_text: proofText || prev.fix_proof_text } : null);
@@ -599,10 +616,10 @@ export default function ConsultationsScreen() {
     }
   };
 
-  return (
+  const content = (
     <RequireAuth>
       <View className="flex-1">
-        <Page>
+        <Page showFloatingShapes={false} scrollable={!isMobile}>
           <NavBar />
 
 
@@ -624,33 +641,46 @@ export default function ConsultationsScreen() {
 
           {/* API Key Warnings */}
           {user?.role === "student" && (!hasGroqKey || !hasLlmKey) ? (
-            <View className="flex-row flex-wrap gap-3 mb-4 w-full">
-              {!hasGroqKey && (
-                <GlassCard className="flex-1 min-w-[280px] flex-row items-center gap-3 bg-amber-500/[0.04] border-amber-500/[0.15] p-4 py-3">
-                  <AlertCircle color="#D97706" size={18} />
-                  <Text className="text-xs font-semibold text-amber-600 flex-1">
-                    Groq API key not configured. Audio transcription will not work. Set it in Settings → AI Gateway.
-                  </Text>
-                </GlassCard>
-              )}
-              {!hasLlmKey && (
-                <GlassCard className="flex-1 min-w-[280px] flex-row items-center gap-3 bg-amber-500/[0.04] border-amber-500/[0.15] p-4 py-3">
-                  <AlertCircle color="#D97706" size={18} />
-                  <Text className="text-xs font-semibold text-amber-600 flex-1">
-                    LLM API key not configured. HOC/LOC classification and AI chat will not work. Set it in Settings → AI Gateway.
-                  </Text>
-                </GlassCard>
-              )}
-            </View>
+            <GlassCard className="flex-row items-center gap-2.5 bg-amber-500/[0.04] border-amber-500/[0.12] p-3 py-2 mb-3.5 w-full">
+              <AlertCircle color="#D97706" size={15} />
+              <Text className="text-[11px] font-semibold text-amber-600 flex-1">
+                {!hasGroqKey && !hasLlmKey
+                  ? "API Keys missing: Voice & AI features are disabled. Please configure them in Settings."
+                  : !hasGroqKey
+                  ? "Groq Key missing: Voice features are disabled. Please configure in Settings."
+                  : "LLM Key missing: AI Chat is disabled. Please configure in Settings."}
+              </Text>
+            </GlassCard>
           ) : null}
 
           {/* Dynamic Dual-Layout by User Role */}
           {user?.role === "student" ? (
             /* ==================== STUDENT WORKSPACE (CLARITY STREAM 3 PANEL) ==================== */
-            <View className="flex-row flex-wrap items-start w-full gap-5">
+            <View className={!isMobile ? "flex-row flex-wrap items-start w-full gap-5" : "flex-1 min-h-0 w-full flex-col gap-4"}>
+              {isMobile && (
+                <View className="flex-row gap-1 bg-white/[0.02] rounded-[10px] p-[3px] border border-white/[0.06]">
+                  {(["upload", "feedback", "chat"] as const).map((tab) => (
+                    <Pressable
+                      key={tab}
+                      onPress={() => setMobileStudentPanel(tab)}
+                      className="flex-1 py-2.5 rounded-lg items-center"
+                      style={{
+                        backgroundColor: mobileStudentPanel === tab ? "rgba(99, 102, 241, 0.08)" : "transparent",
+                        borderWidth: 1,
+                        borderColor: mobileStudentPanel === tab ? "rgba(99, 102, 241, 0.15)" : "transparent",
+                      }}
+                    >
+                      <Text className="text-[11px] font-extrabold" style={{ color: mobileStudentPanel === tab ? "#6366F1" : "#94A3B8" }}>
+                        {tab === "upload" ? "UPLOAD" : tab === "feedback" ? "FEEDBACK" : "AI CHAT"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
 
               {/* Left Panel: File Sync & Archive List */}
-              <GlassCard className="flex-1 min-w-[320px] p-6 h-[680px] flex flex-col justify-between">
+              {(!isMobile || mobileStudentPanel === "upload") && (
+              <GlassCard className={!isMobile ? "flex-1 min-w-[320px] p-6 h-[680px] flex flex-col justify-between" : "flex-1 w-full p-5 flex flex-col justify-between"}>
                 <View className="flex-1 gap-3">
                   <View className="flex-row items-center gap-2.5 border-b border-white/[0.06] pb-3.5 mb-2">
                     <CloudUpload color="#4F46E5" size={18} />
@@ -658,6 +688,7 @@ export default function ConsultationsScreen() {
                   </View>
 
                   <ScrollView
+                    nestedScrollEnabled={true}
                     showsVerticalScrollIndicator={true}
                     className="flex-1"
                     {...({ className: "ultra-thin-scroll" } as any)}
@@ -715,7 +746,7 @@ export default function ConsultationsScreen() {
                           </View>
                           <Pressable
                             onPress={() => Linking.openURL(`${API_URL}/storage/final/${encodeURIComponent(selected!.final_document_filename!)}`)}
-                            className="px-2.5 py-1 rounded-md border border-emerald-500/[0.15] bg-emerald-500/[0.08]"
+                            className="px-2.5 py-2 rounded-md border border-emerald-500/[0.15] bg-emerald-500/[0.08]"
                             style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                           >
                             <Text className="text-emerald-500 text-[10px] font-bold">Download</Text>
@@ -745,7 +776,7 @@ export default function ConsultationsScreen() {
                           <Text className="text-violet-400 text-[11px] font-bold flex-1" numberOfLines={1}>{revisedFile.name}</Text>
                           <Pressable
                             onPress={() => setRevisedFile(null)}
-                            className="px-2 py-1 rounded-md bg-white/[0.04] border border-white/[0.06]"
+                            className="px-2 py-2 rounded-md bg-white/[0.04] border border-white/[0.06]"
                           >
                             <Text className="text-slate-400 text-[10px] font-bold">Remove</Text>
                           </Pressable>
@@ -771,7 +802,7 @@ export default function ConsultationsScreen() {
                           </View>
                           <Pressable
                             onPress={() => Linking.openURL(`${API_URL}/storage/revised/${encodeURIComponent(selected!.revised_document_filename!)}`)}
-                            className="px-2.5 py-1 rounded-md border border-violet-500/[0.15] bg-violet-500/[0.08]"
+                            className="px-2.5 py-2 rounded-md border border-violet-500/[0.15] bg-violet-500/[0.08]"
                             style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                           >
                             <Text className="text-violet-500 text-[10px] font-bold">Download</Text>
@@ -812,10 +843,11 @@ export default function ConsultationsScreen() {
 
                   {showArchiveDropdown && (
                     <GlassCard
-                      className="absolute bottom-14 left-0 right-0 max-h-[220px] p-2.5 z-[99999] bg-slate-900/[0.95] border-white/[0.06]"
-                      style={Platform.OS === "web" ? { boxShadow: "0 10px 15px rgba(0,0,0,0.1)" } : { shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 15 }}
+                      className={!isMobile ? "absolute bottom-14 left-0 right-0 max-h-[220px] p-2.5 z-[99999] bg-slate-900/[0.95] border-white/[0.06]" : "absolute bottom-16 left-0 right-0 max-h-[220px] p-2.5 z-[99999] bg-slate-900/[0.95] border-white/[0.06]"}
+                      style={!isMobile ? { boxShadow: "0 10px 15px rgba(0,0,0,0.1)" } : { shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 15 }}
                     >
                       <ScrollView
+                        nestedScrollEnabled={true}
                         showsVerticalScrollIndicator={true}
                         {...({ className: "ultra-thin-scroll" } as any)}
                         contentContainerStyle={{ gap: 8 }}
@@ -862,12 +894,14 @@ export default function ConsultationsScreen() {
                   )}
                 </View>
               </GlassCard>
+              )}
 
               {/* Center Panel: Feedback Stream & Transcript Tabs */}
-              <GlassCard className="flex-1 min-w-[320px] p-6 h-[680px]">
+              {(!isMobile || mobileStudentPanel === "feedback") && (
+              <GlassCard className={!isMobile ? "flex-1 min-w-[320px] p-6 h-[680px]" : "flex-1 w-full p-5"}>
                 <View className="flex-1 gap-4">
-                  <View className="flex-row justify-between items-center border-b border-white/[0.08] pb-3.5 flex-wrap gap-3">
-                    <View className="gap-1 flex-1 min-w-0 mr-2">
+                  <View className={!isMobile ? "flex-row justify-between items-center border-b border-white/[0.08] pb-3.5 gap-3" : "flex-col border-b border-white/[0.08] pb-3.5 gap-3"}>
+                    <View className={!isMobile ? "gap-1 flex-1 min-w-0 mr-2" : "gap-1 w-full"}>
                       <Text className="text-lg font-black tracking-tight text-slate-50">Advisory Workspace</Text>
                       {selected && (
                         <Pressable
@@ -883,53 +917,53 @@ export default function ConsultationsScreen() {
                     </View>
 
                     {/* Tabs switch */}
-                    <View className="flex-row gap-1 bg-white/[0.02] rounded-[10px] p-[3px] border border-white/[0.06] flex-nowrap">
+                    <View className={!isMobile ? "flex-row gap-1 bg-white/[0.02] rounded-[10px] p-[3px] border border-white/[0.06] flex-nowrap" : "flex-row gap-1 bg-white/[0.02] rounded-[10px] p-[3px] border border-white/[0.06] flex-nowrap w-full"}>
                       <Pressable
                         onPress={() => setStudentTab("feedback")}
-                        className="px-2 py-1.5 rounded-lg"
+                        className={!isMobile ? "px-3 py-2.5 rounded-lg" : "flex-1 py-2.5 rounded-lg items-center justify-center"}
                         style={{
                           backgroundColor: studentTab === "feedback" ? "rgba(99, 102, 241, 0.08)" : "transparent",
                           borderWidth: 1,
                           borderColor: studentTab === "feedback" ? "rgba(99, 102, 241, 0.15)" : "transparent",
                         }}
                       >
-                        <Text className="text-[9.8px] font-extrabold" style={{ color: studentTab === "feedback" ? "#6366F1" : "#94A3B8" }}>FEEDBACK</Text>
+                        <Text className={!isMobile ? "text-[9.8px] font-extrabold" : "text-[10px] font-extrabold"} style={{ color: studentTab === "feedback" ? "#6366F1" : "#94A3B8" }}>{!isMobile ? "FEEDBACK" : "FB"}</Text>
                       </Pressable>
                       <Pressable
                         onPress={() => setStudentTab("transcript")}
-                        className="px-2 py-1.5 rounded-lg"
+                        className={!isMobile ? "px-3 py-2.5 rounded-lg" : "flex-1 py-2.5 rounded-lg items-center justify-center"}
                         style={{
                           backgroundColor: studentTab === "transcript" ? "rgba(99, 102, 241, 0.08)" : "transparent",
                           borderWidth: 1,
                           borderColor: studentTab === "transcript" ? "rgba(99, 102, 241, 0.15)" : "transparent",
                         }}
                       >
-                        <Text className="text-[9.8px] font-extrabold" style={{ color: studentTab === "transcript" ? "#6366F1" : "#94A3B8" }}>TRANSCRIPT</Text>
+                        <Text className={!isMobile ? "text-[9.8px] font-extrabold" : "text-[10px] font-extrabold"} style={{ color: studentTab === "transcript" ? "#6366F1" : "#94A3B8" }}>{!isMobile ? "TRANSCRIPT" : "TRANS"}</Text>
                       </Pressable>
                       <Pressable
                         onPress={() => setStudentTab("annotations")}
-                        className="px-2 py-1.5 rounded-lg"
+                        className={!isMobile ? "px-3 py-2.5 rounded-lg" : "flex-1 py-2.5 rounded-lg items-center justify-center"}
                         style={{
                           backgroundColor: studentTab === "annotations" ? "rgba(124, 58, 237, 0.08)" : "transparent",
                           borderWidth: 1,
                           borderColor: studentTab === "annotations" ? "rgba(124, 58, 237, 0.15)" : "transparent",
                         }}
                       >
-                        <Text className="text-[9.8px] font-extrabold" style={{ color: studentTab === "annotations" ? "#7C3AED" : "#94A3B8" }}>
-                          ANNOTATIONS ({selected?.revision_annotations?.length ?? 0})
+                        <Text className={!isMobile ? "text-[9.8px] font-extrabold" : "text-[10px] font-extrabold"} style={{ color: studentTab === "annotations" ? "#7C3AED" : "#94A3B8" }}>
+                          {!isMobile ? `ANNOTATIONS (${selected?.revision_annotations?.length ?? 0})` : `ANNOT (${selected?.revision_annotations?.length ?? 0})`}
                         </Text>
                       </Pressable>
                       <Pressable
                         onPress={() => setStudentTab("drafts")}
-                        className="px-2 py-1.5 rounded-lg"
+                        className={!isMobile ? "px-3 py-2.5 rounded-lg" : "flex-1 py-2.5 rounded-lg items-center justify-center"}
                         style={{
                           backgroundColor: studentTab === "drafts" ? "rgba(8, 145, 178, 0.08)" : "transparent",
                           borderWidth: 1,
                           borderColor: studentTab === "drafts" ? "rgba(8, 145, 178, 0.15)" : "transparent",
                         }}
                       >
-                        <Text className="text-[9.8px] font-extrabold" style={{ color: studentTab === "drafts" ? "#14B8A6" : "#94A3B8" }}>
-                          DRAFTS ({logs.length})
+                        <Text className={!isMobile ? "text-[9.8px] font-extrabold" : "text-[10px] font-extrabold"} style={{ color: studentTab === "drafts" ? "#14B8A6" : "#94A3B8" }}>
+                          {!isMobile ? `DRAFTS (${logs.length})` : `DRAFTS (${logs.length})`}
                         </Text>
                       </Pressable>
                     </View>
@@ -939,6 +973,7 @@ export default function ConsultationsScreen() {
                     studentTab === "feedback" ? (
                       /* FEEDBACK LIST VIEW */
                       <ScrollView
+                        nestedScrollEnabled={true}
                         showsVerticalScrollIndicator={true}
                         className="flex-1"
                         {...({ className: "ultra-thin-scroll" } as any)}
@@ -952,7 +987,8 @@ export default function ConsultationsScreen() {
                             style={({ pressed }) => ({
                               gap: 10,
                               transform: [{ scale: pressed ? 0.985 : 1 }],
-                              ...(Platform.OS === "web" ? { boxShadow: `0 0 12px ${classifying ? "#7C3AED" : "#0891B2"}14` } : { shadowColor: classifying ? "#7C3AED" : "#0891B2", shadowOpacity: 0.08, shadowRadius: 12 }),
+                             ...(Platform.OS === "web" ? { boxShadow: `0 0 12px ${classifying ? "#7C3AED" : "#0891B2"}14` } : { shadowColor: classifying ? "#7C3AED" : "#0891B2", shadowOpacity: 0.08, shadowRadius: 12 }),
+                            ...(!isMobile ? { boxShadow: `0 0 12px ${classifying ? "#7C3AED" : "#0891B2"}14` } : { shadowColor: classifying ? "#7C3AED" : "#0891B2", shadowOpacity: 0.08, shadowRadius: 12 }),
                             })}
                           >
                             <Cpu color={classifying ? "#7C3AED" : "#0891B2"} size={16} />
@@ -967,168 +1003,248 @@ export default function ConsultationsScreen() {
                         {selected.feedback_items?.map((item) => {
                           const isFixed = item.status === "Fixed";
                           const isValidated = item.status === "Validated";
+                          const isPending = !isFixed && !isValidated;
+
+                          // Set dynamic colors based on status
+                          const statusColor = isValidated
+                            ? "#6366F1" // Indigo for Validated
+                            : isFixed
+                            ? "#10B981" // Green for Fixed
+                            : "#D97706"; // Amber for Pending
+
+                          const statusBg = isValidated
+                            ? "rgba(99, 102, 241, 0.08)"
+                            : isFixed
+                            ? "rgba(16, 185, 129, 0.08)"
+                            : "rgba(217, 119, 6, 0.08)";
+
+                          const statusBorder = isValidated
+                            ? "rgba(99, 102, 241, 0.2)"
+                            : isFixed
+                            ? "rgba(16, 185, 129, 0.2)"
+                            : "rgba(217, 119, 6, 0.2)";
+
+                          const isCommentsExpanded = !!expandedComments[item.id];
+                          const commentsCount = item.comments?.length ?? 0;
 
                           return (
                             <View
                               key={item.id}
-                              className="rounded-2xl border border-l-4 p-4 gap-2.5 bg-slate-800/40"
+                              className="rounded-2xl border bg-slate-900/40 mb-3.5 overflow-hidden"
                               style={{
-                                borderLeftColor: isFixed ? "#059669" : isValidated ? "#6366F1" : "#D97706",
-                                borderColor: isFixed ? "rgba(5, 150, 105, 0.3)" : isValidated ? "rgba(99, 102, 241, 0.3)" : "rgba(217, 119, 6, 0.3)",
+                                borderLeftWidth: 4,
+                                borderLeftColor: statusColor,
+                                borderColor: statusBorder,
                               }}
                             >
-                              <View className="flex-row justify-between items-center">
-                                <Badge text={item.category.toUpperCase()} color={item.category === "Major" ? "#DC2626" : "#4F46E5"} />
+                              {/* 1. Header Metadata Row */}
+                              <View className="flex-row justify-between items-center px-4 py-3 bg-slate-950/20 border-b border-white/[0.04]">
+                                <Badge
+                                  text={item.category.toUpperCase()}
+                                  color={item.category === "Major" ? "#EF4444" : "#3B82F6"}
+                                />
+                                <View
+                                  className="rounded-lg px-2.5 py-1 border flex-row items-center gap-1.5"
+                                  style={{ borderColor: statusBorder, backgroundColor: statusBg }}
+                                >
+                                  <View className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: statusColor }} />
+                                  <Text className="text-[10px] font-black tracking-wider" style={{ color: statusColor }}>
+                                    {isValidated ? "VALIDATED BY LECTURER" : isFixed ? "FIXED (AWAITING AUDIT)" : "PENDING REVISION"}
+                                  </Text>
+                                </View>
+                              </View>
 
-                                {fixingFeedbackId === item.id ? (
-                                  <View className="flex-row items-center gap-2">
+                              {/* 2. Main Content Card Body */}
+                              <View className="p-4 gap-3">
+                                <Text className="text-[13.5px] font-medium text-slate-100 leading-relaxed">
+                                  {item.content}
+                                </Text>
+
+                                {/* Student Fix Action Box (If description is submitted) */}
+                                {item.fix_proof_text ? (
+                                  <View className="bg-emerald-500/[0.03] border border-emerald-500/10 rounded-xl p-3 gap-1.5 mt-1">
+                                    <View className="flex-row items-center gap-1.5">
+                                      <CheckCircle color="#10B981" size={12} />
+                                      <Text className="text-emerald-500 text-[9px] font-black tracking-widest uppercase">Student Fix Action</Text>
+                                    </View>
+                                    <Text className="text-slate-300 text-[12px] font-medium leading-relaxed">
+                                      {item.fix_proof_text}
+                                    </Text>
+                                  </View>
+                                ) : null}
+
+                                {/* Inline Fix Description Editor Form */}
+                                {fixingFeedbackId === item.id && (
+                                  <View className="mt-3 bg-slate-950/40 border border-white/[0.06] rounded-xl p-3.5 gap-3">
+                                    <Text className="text-[10px] font-black tracking-wider text-amber-500 uppercase">Describe your revision fix</Text>
                                     <TextInput
                                       value={fixProofText}
                                       onChangeText={setFixProofText}
-                                      placeholder="Describe your fix..."
-                                      placeholderTextColor="#475569"
-                                      className="bg-white/[0.02] border border-white/[0.06] rounded-lg text-slate-50 px-2.5 py-1.5 text-[11px] font-medium w-[180px]"
-                                      style={{ outlineStyle: "none" } as any}
+                                      placeholder="Explain exactly how you addressed this feedback in your manuscript..."
+                                      placeholderTextColor="#64748B"
+                                      multiline
+                                      className="bg-slate-950/80 border border-white/[0.08] rounded-lg text-slate-50 p-3 text-[12.5px] font-medium min-h-[70px]"
+                                      style={{ outlineStyle: "none", textAlignVertical: "top" } as any}
                                     />
-                                    <Pressable
-                                      onPress={() => {
-                                        void updateStatus(item, "Fixed", fixProofText);
-                                        setFixingFeedbackId(null);
-                                        setFixProofText("");
-                                      }}
-                                      className="px-2.5 py-1 rounded-md bg-emerald-500/[0.12] border border-emerald-500/[0.25]"
-                                    >
-                                      <Text className="text-emerald-500 text-[10px] font-bold">Confirm</Text>
-                                    </Pressable>
-                                    <Pressable
-                                      onPress={() => { setFixingFeedbackId(null); setFixProofText(""); }}
-                                      className="px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/[0.06]"
-                                    >
-                                      <Text className="text-slate-400 text-[10px] font-bold">Cancel</Text>
-                                    </Pressable>
-                                  </View>
-                                ) : (
-                                  <Pressable
-                                    onPress={() => {
-                                      if (isFixed) return;
-                                      if (isValidated) return;
-                                      setFixingFeedbackId(item.id);
-                                      setFixProofText("");
-                                    }}
-                                    disabled={isFixed || isValidated}
-                                    className="flex-row items-center gap-1.5 px-2.5 py-1 rounded-md"
-                                    style={({ pressed }) => ({
-                                      gap: 6,
-                                      backgroundColor: isFixed ? "rgba(5, 150, 105, 0.06)" : isValidated ? "rgba(79, 70, 229, 0.06)" : "rgba(217, 119, 6, 0.06)",
-                                      borderWidth: 1,
-                                      borderColor: isFixed ? "rgba(5, 150, 105, 0.15)" : isValidated ? "rgba(79, 70, 229, 0.15)" : "rgba(217, 119, 6, 0.15)",
-                                      transform: [{ scale: pressed && !isFixed && !isValidated ? 0.96 : 1 }],
-                                      opacity: isFixed || isValidated ? 0.8 : 1,
-                                    })}
-                                  >
-                                    <View
-                                      className="w-2.5 h-2.5 rounded-[3px] justify-center items-center"
-                                      style={{
-                                        borderWidth: 1,
-                                        borderColor: isFixed ? "#059669" : isValidated ? "#4F46E5" : "#D97706",
-                                        backgroundColor: isFixed ? "#059669" : "transparent",
-                                      }}
-                                    >
-                                      {isFixed && <Text className="text-white text-[6px] font-black">&#10003;</Text>}
+                                    <View className="flex-row justify-end gap-2">
+                                      <Pressable
+                                        onPress={() => {
+                                          setFixingFeedbackId(null);
+                                          setFixProofText("");
+                                        }}
+                                        className="px-3.5 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06]"
+                                        style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+                                      >
+                                        <Text className="text-slate-400 text-[11px] font-bold">Cancel</Text>
+                                      </Pressable>
+                                      <Pressable
+                                        onPress={() => {
+                                          void updateStatus(item, "Fixed", fixProofText);
+                                          setFixingFeedbackId(null);
+                                          setFixProofText("");
+                                        }}
+                                        className="px-3.5 py-2 rounded-lg bg-emerald-500/[0.12] border border-emerald-500/[0.25]"
+                                        style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+                                      >
+                                        <Text className="text-emerald-500 text-[11px] font-bold">Submit Fix</Text>
+                                      </Pressable>
                                     </View>
-                                    <Text className="text-[9px] font-black" style={{ color: isFixed ? "#059669" : isValidated ? "#4F46E5" : "#D97706" }}>
-                                      {item.status.toUpperCase()}
-                                    </Text>
-                                  </Pressable>
+                                  </View>
                                 )}
                               </View>
 
-                              <Text className="text-[13.5px] font-medium text-slate-200" style={{ lineHeight: 20 }}>
-                                {item.content}
-                              </Text>
+                              {/* 3. Actions Row (Footer) */}
+                              <View className="flex-row justify-between items-center flex-wrap gap-2 px-4 py-3 bg-slate-950/10 border-t border-white/[0.03]">
+                                <View className="flex-row gap-2 flex-wrap">
+                                  {/* Quick AI Revision Button */}
+                                  {!isValidated && (
+                                    <Pressable
+                                      onPress={() => void handleQuickRevisi(item.content)}
+                                      className="flex-row items-center bg-violet-600/[0.06] border border-violet-600/20 rounded-lg px-3 py-2"
+                                      style={({ pressed }) => ({
+                                        gap: 5,
+                                        transform: [{ scale: pressed ? 0.97 : 1 }],
+                                      })}
+                                    >
+                                      <Cpu color="#8B5CF6" size={11} />
+                                      <Text className="text-[11px] font-bold text-violet-500">Quick AI Revision</Text>
+                                    </Pressable>
+                                  )}
 
-                              {/* Fix Proof Text Display */}
-                              {item.fix_proof_text ? (
-                                <View className="mt-1.5 bg-emerald-500/[0.04] border border-emerald-500/[0.12] rounded-lg p-2.5 gap-1">
-                                  <Text className="text-emerald-500 text-[9px] font-black tracking-[1.5px]">FIX DESCRIPTION</Text>
-                                  <Text className="text-slate-300 text-[12px] font-medium" style={{ lineHeight: 18 }}>
-                                    {item.fix_proof_text}
-                                  </Text>
+                                  {/* Mark/Edit Fix Button */}
+                                  {!isValidated && (
+                                    <Pressable
+                                      onPress={() => {
+                                        setFixingFeedbackId(item.id);
+                                        setFixProofText(item.fix_proof_text || "");
+                                      }}
+                                      className="flex-row items-center bg-white/[0.02] border border-white/[0.08] rounded-lg px-3 py-2"
+                                      style={({ pressed }) => ({
+                                        gap: 5,
+                                        transform: [{ scale: pressed ? 0.97 : 1 }],
+                                      })}
+                                    >
+                                      <CheckCircle color={isFixed ? "#10B981" : "#D97706"} size={11} />
+                                      <Text className="text-[11px] font-bold text-slate-300">
+                                        {isFixed ? "Edit Fix Description" : "Submit Fix Proof"}
+                                      </Text>
+                                    </Pressable>
+                                  )}
                                 </View>
-                              ) : null}
 
-                              <View className="flex-row gap-2 flex-wrap mt-1 justify-end">
+                                {/* Comments Toggle Button */}
                                 <Pressable
-                                  onPress={() => void handleQuickRevisi(item.content)}
-                                  className="flex-row items-center bg-white/[0.03] border border-violet-600/[0.2] rounded-lg px-3 py-1.5"
+                                  onPress={() => toggleComments(item.id)}
+                                  className="flex-row items-center bg-slate-800/40 border border-white/[0.04] rounded-lg px-3 py-2"
                                   style={({ pressed }) => ({
-                                    gap: 6,
+                                    gap: 5,
                                     transform: [{ scale: pressed ? 0.97 : 1 }],
                                   })}
                                 >
-                                  <Cpu color="#7C3AED" size={12} />
-                                  <Text className="text-[11px] font-extrabold text-violet-600">Quick AI Revision</Text>
+                                  <Text className="text-[11px] font-bold text-cyan-500">
+                                    💬 Comments {commentsCount > 0 ? `(${commentsCount})` : ""}
+                                  </Text>
+                                  <Text className="text-[9px] text-cyan-600 font-bold">
+                                    {isCommentsExpanded ? "\u25B2" : "\u25BC"}
+                                  </Text>
                                 </Pressable>
                               </View>
 
-                              {/* Comments Thread */}
-                              {item.comments && item.comments.length > 0 && (
-                                <View className="mt-2 gap-2 border-t border-white/[0.04] pt-2">
-                                  <Text className="text-slate-400 text-[9px] font-black tracking-[1.5px]">COMMENTS</Text>
-                                  {item.comments.map((comment) => (
-                                    <View
-                                      key={comment.id}
-                                      className={`rounded-lg p-2.5 border ${
-                                        comment.author_role === "student"
-                                          ? "bg-indigo-500/[0.06] border-indigo-500/[0.12] ml-4"
-                                          : "bg-white/[0.03] border-white/[0.06] mr-4"
-                                      }`}
-                                    >
-                                      <Text className="text-[9px] font-black tracking-[1px] text-slate-400 mb-1">
-                                        {comment.author_role === "student" ? "YOU" : "ADVISOR"}
-                                      </Text>
-                                      <Text className="text-slate-200 text-[12px] leading-[18px] font-medium">{comment.content}</Text>
+                              {/* 4. Collapsible Comments Section */}
+                              {isCommentsExpanded && (
+                                <View className="px-4 pb-4 pt-3.5 bg-slate-950/20 border-t border-white/[0.03] gap-3">
+                                  {/* Comment Thread List */}
+                                  {commentsCount > 0 ? (
+                                    <View className="gap-2">
+                                      {item.comments?.map((comment) => {
+                                        const isAuthorStudent = comment.author_role === "student";
+                                        return (
+                                          <View
+                                            key={comment.id}
+                                            className={`rounded-xl p-3 border ${
+                                              isAuthorStudent
+                                                ? "bg-indigo-500/[0.04] border-indigo-500/10 ml-6"
+                                                : "bg-white/[0.02] border-white/[0.06] mr-6"
+                                            }`}
+                                          >
+                                            <View className="flex-row justify-between items-center mb-1">
+                                              <Text className="text-[9px] font-black tracking-widest text-slate-400">
+                                                {isAuthorStudent ? "YOU" : "ADVISOR"}
+                                              </Text>
+                                              <Text className="text-[8.5px] font-semibold text-slate-500">
+                                                {new Date(comment.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                                              </Text>
+                                            </View>
+                                            <Text className="text-slate-200 text-[12px] leading-relaxed font-medium">
+                                              {comment.content}
+                                            </Text>
+                                          </View>
+                                        );
+                                      })}
                                     </View>
-                                  ))}
-                                </View>
-                              )}
+                                  ) : (
+                                    <Text className="text-slate-500 text-[11px] font-semibold italic text-center py-2">
+                                      No comments yet. Start a discussion with your advisor.
+                                    </Text>
+                                  )}
 
-                              {/* Add Comment Button */}
-                              {commentingOnFeedbackId === item.id ? (
-                                <View className="mt-2 gap-2 border-t border-white/[0.04] pt-2">
-                                  <TextInput
-                                    value={commentText}
-                                    onChangeText={setCommentText}
-                                    placeholder="Add a comment or response..."
-                                    placeholderTextColor="#475569"
-                                    multiline
-                                    className="bg-white/[0.02] border border-white/[0.06] rounded-lg text-slate-50 p-2.5 text-[12px] font-medium min-h-[60px]"
-                                    style={{ outlineStyle: "none", textAlignVertical: "top" } as any}
-                                  />
-                                  <View className="flex-row gap-2">
-                                    <Pressable
-                                      onPress={() => { setCommentingOnFeedbackId(null); setCommentText(""); }}
-                                      className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06]"
-                                    >
-                                      <Text className="text-slate-400 text-[11px] font-bold">Cancel</Text>
-                                    </Pressable>
-                                    <Pressable
-                                      onPress={() => void handleAddComment(item.id)}
-                                      disabled={!commentText.trim()}
-                                      className="px-3 py-1.5 rounded-lg bg-indigo-500/[0.12] border border-indigo-500/[0.25]"
-                                      style={{ opacity: commentText.trim() ? 1 : 0.5 }}
-                                    >
-                                      <Text className="text-indigo-400 text-[11px] font-bold">Post Comment</Text>
-                                    </Pressable>
-                                  </View>
+                                  {/* Post Comment Input Block */}
+                                  {commentingOnFeedbackId === item.id ? (
+                                    <View className="gap-2.5 mt-1 border-t border-white/[0.04] pt-3">
+                                      <TextInput
+                                        value={commentText}
+                                        onChangeText={setCommentText}
+                                        placeholder="Type a response or question about this revision item..."
+                                        placeholderTextColor="#64748B"
+                                        multiline
+                                        className="bg-slate-950/80 border border-white/[0.08] rounded-lg text-slate-50 p-2.5 text-[12px] font-medium min-h-[60px]"
+                                        style={{ outlineStyle: "none", textAlignVertical: "top" } as any}
+                                      />
+                                      <View className="flex-row justify-end gap-2">
+                                        <Pressable
+                                          onPress={() => {
+                                            setCommentingOnFeedbackId(null);
+                                            setCommentText("");
+                                          }}
+                                          className="px-3.5 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06]"
+                                          style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+                                        >
+                                          <Text className="text-slate-400 text-[11px] font-bold">Cancel</Text>
+                                        </Pressable>
+                                        <Pressable
+                                          onPress={() => void handleAddComment(item.id)}
+                                          disabled={!commentText.trim()}
+                                          className="px-3.5 py-2 rounded-lg bg-indigo-500/[0.12] border border-indigo-500/[0.25]"
+                                          style={({ pressed }) => [{
+                                            opacity: commentText.trim() ? (pressed ? 0.7 : 1) : 0.4
+                                          }]}
+                                        >
+                                          <Text className="text-indigo-400 text-[11px] font-bold">Post Comment</Text>
+                                        </Pressable>
+                                      </View>
+                                    </View>
+                                  ) : null}
                                 </View>
-                              ) : (
-                                <Pressable
-                                  onPress={() => setCommentingOnFeedbackId(item.id)}
-                                  className="mt-2 self-start px-2.5 py-1 rounded-md bg-white/[0.03] border border-white/[0.06]"
-                                >
-                                  <Text className="text-slate-400 text-[10px] font-bold">+ Add Comment</Text>
-                                </Pressable>
                               )}
                             </View>
                           );
@@ -1141,6 +1257,7 @@ export default function ConsultationsScreen() {
                       /* TRANSCRIPT VIEW */
                       <View className="flex-1">
                         <ScrollView
+                          nestedScrollEnabled={true}
                           showsVerticalScrollIndicator={true}
                           className="flex-1 bg-slate-900/[0.4] rounded-[14px] border border-white/[0.04] p-3.5"
                           {...({ className: "ultra-thin-scroll" } as any)}
@@ -1154,6 +1271,7 @@ export default function ConsultationsScreen() {
                       /* ANNOTATIONS VIEW */
                       <View className="flex-1">
                         <ScrollView
+                          nestedScrollEnabled={true}
                           showsVerticalScrollIndicator={true}
                           className="flex-1"
                           {...({ className: "ultra-thin-scroll" } as any)}
@@ -1175,7 +1293,7 @@ export default function ConsultationsScreen() {
                                 </View>
                                 <Pressable
                                   onPress={() => Linking.openURL(`${API_URL}/storage/annotations/${encodeURIComponent(ann.filename)}`)}
-                                  className="bg-violet-600/[0.08] px-2.5 py-1 rounded-md border border-violet-600/[0.15]"
+                                  className="bg-violet-600/[0.08] px-2.5 py-2 rounded-md border border-violet-600/[0.15]"
                                   style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                                 >
                                   <Text className="text-violet-600 text-[10px] font-bold">Download</Text>
@@ -1191,8 +1309,8 @@ export default function ConsultationsScreen() {
                                   />
                                 ) : (
                                   <Image
-                                    source={{ uri: `${API_URL}/storage/annotations/${ann.filename}` }}
-                                    style={{ width: "100%", height: 180, borderRadius: 8, marginBottom: 8, opacity: 0.9 }}
+                                    source={{ uri: `${API_URL}/storage/annotations/${ann.filename}`, headers: { "Cache-Control": "max-age=3600" } }}
+                                    style={{ width: "100%", height: 180, borderRadius: 8, marginBottom: 8, opacity: 0.9, backgroundColor: "rgba(99,102,241,0.1)" }}
                                     resizeMode="cover"
                                   />
                                 )
@@ -1200,6 +1318,7 @@ export default function ConsultationsScreen() {
                               <View className="bg-white/[0.02] border border-white/[0.04] rounded-[10px] p-2.5 gap-1.5">
                                 <Text className="text-violet-600 text-[9px] font-black tracking-[1.5px]">AI EXTRACTED CONTENT</Text>
                                 <ScrollView
+                                  nestedScrollEnabled={true}
                                   showsVerticalScrollIndicator
                                   style={{ maxHeight: 120 }}
                                   {...({ className: "ultra-thin-scroll" } as any)}
@@ -1222,6 +1341,7 @@ export default function ConsultationsScreen() {
                       /* DRAFTS HISTORY VIEW */
                       <View className="flex-1">
                         <ScrollView
+                          nestedScrollEnabled={true}
                           showsVerticalScrollIndicator={true}
                           className="flex-1"
                           {...({ className: "ultra-thin-scroll" } as any)}
@@ -1253,7 +1373,7 @@ export default function ConsultationsScreen() {
                                   <View className="flex-row gap-2">
                                     <Pressable
                                       onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
-                                      className="px-2.5 py-[5px] rounded-md border border-cyan-600/[0.15] bg-cyan-600/[0.08]"
+                                      className="px-2.5 py-2 rounded-md border border-cyan-600/[0.15] bg-cyan-600/[0.08]"
                                       style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                                     >
                                       <Text className="text-cyan-600 text-[10px] font-bold">Download</Text>
@@ -1261,7 +1381,7 @@ export default function ConsultationsScreen() {
                                     {!isSelected && (
                                       <Pressable
                                         onPress={() => setSelectedLog(log)}
-                                        className="px-2.5 py-[5px] rounded-md border border-indigo-600/[0.15] bg-indigo-600/[0.08]"
+                                        className="px-2.5 py-2 rounded-md border border-indigo-600/[0.15] bg-indigo-600/[0.08]"
                                         style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                                       >
                                         <Text className="text-indigo-600 text-[10px] font-bold">Load Session</Text>
@@ -1272,15 +1392,15 @@ export default function ConsultationsScreen() {
 
                                 <View className="flex-row gap-3 bg-white/[0.02] rounded-[10px] p-2.5">
                                   <View className="flex-1 gap-1">
-                                    <Text className="text-slate-400 text-[8px] font-black tracking-[1px]">FEEDBACK ITEMS</Text>
+                                    <Text className="text-slate-400 text-[10px] font-black tracking-[1px]">FEEDBACK ITEMS</Text>
                                     <Text className="text-slate-300 text-[11px] font-semibold">{feedbackCount} points</Text>
                                   </View>
                                   <View className="flex-1 gap-1">
-                                    <Text className="text-slate-400 text-[8px] font-black tracking-[1px]">ANNOTATIONS</Text>
+                                    <Text className="text-slate-400 text-[10px] font-black tracking-[1px]">ANNOTATIONS</Text>
                                     <Text className="text-slate-300 text-[11px] font-semibold">{annotationCount} files</Text>
                                   </View>
                                   <View className="flex-1 gap-1">
-                                    <Text className="text-slate-400 text-[8px] font-black tracking-[1px]">STATUS</Text>
+                                    <Text className="text-slate-400 text-[10px] font-black tracking-[1px]">STATUS</Text>
                                     <Text
                                       className="text-[11px] font-semibold"
                                       style={{ color: log.feedback_items?.every(f => f.status === "Validated") ? "#059669" : "#D97706" }}
@@ -1307,9 +1427,11 @@ export default function ConsultationsScreen() {
                   )}
                 </View>
               </GlassCard>
+              )}
 
               {/* Right Panel: AI Academic Assistant Chat */}
-              <GlassCard className="flex-1 min-w-[320px] p-6 h-[680px]">
+              {(!isMobile || mobileStudentPanel === "chat") && (
+              <GlassCard className={!isMobile ? "flex-1 min-w-[320px] p-6 h-[680px]" : "flex-1 w-full p-5"}>
                 {selected ? (
                   <View className="flex-1 gap-4">
                     {/* Active Session Info with Chat Type Switcher */}
@@ -1341,7 +1463,7 @@ export default function ConsultationsScreen() {
                           >
                             AI Oracle Assistant
                           </Text>
-                          {!hasLlmKey && <Text className="text-red-600 text-[8px] font-extrabold ml-1">NO KEY</Text>}
+                          {!hasLlmKey && <Text className="text-red-600 text-[10px] font-extrabold ml-1">NO KEY</Text>}
                         </Pressable>
                         <Pressable
                           onPress={() => setChatMode("advisor")}
@@ -1363,8 +1485,9 @@ export default function ConsultationsScreen() {
                     <View className="flex-1 gap-2.5">
                       <ScrollView
                         ref={chatScrollRef}
+                        nestedScrollEnabled={true}
                         showsVerticalScrollIndicator={true}
-                        className="h-[420px] bg-slate-900/[0.4] border border-white/[0.04] rounded-[14px] p-3"
+                        className={!isMobile ? "h-[420px] bg-slate-900/[0.4] border border-white/[0.04] rounded-[14px] p-3" : "flex-1 bg-slate-900/[0.4] border border-white/[0.04] rounded-[14px] p-3"}
                         {...({ className: "ultra-thin-scroll" } as any)}
                         contentContainerStyle={{ gap: 10, paddingBottom: 8 }}
                       >
@@ -1498,19 +1621,42 @@ export default function ConsultationsScreen() {
                   </View>
                 )}
               </GlassCard>
+              )}
             </View>
           ) : (
             /* ==================== LECTURER WORKSPACE (3-PANEL ASYMMETRIC) ==================== */
-            <View className="flex-row flex-wrap items-start w-full gap-5">
+            <View className={!isMobile ? "flex-row flex-wrap items-start w-full gap-5" : "flex-1 min-h-0 w-full flex-col gap-4"}>
+              {isMobile && (
+                <View className="flex-row gap-1 bg-white/[0.02] rounded-[10px] p-[3px] border border-white/[0.06]">
+                  {(["queue", "transcript", "validation"] as const).map((tab) => (
+                    <Pressable
+                      key={tab}
+                      onPress={() => setMobileLecturerPanel(tab)}
+                      className="flex-1 py-2.5 rounded-lg items-center"
+                      style={{
+                        backgroundColor: mobileLecturerPanel === tab ? "rgba(99, 102, 241, 0.08)" : "transparent",
+                        borderWidth: 1,
+                        borderColor: mobileLecturerPanel === tab ? "rgba(99, 102, 241, 0.15)" : "transparent",
+                      }}
+                    >
+                      <Text className="text-[11px] font-extrabold" style={{ color: mobileLecturerPanel === tab ? "#6366F1" : "#94A3B8" }}>
+                        {tab === "queue" ? "QUEUE" : tab === "transcript" ? "TRANSCRIPT" : "VALIDATION"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
 
               {/* Panel Kiri: Student Document Queue */}
-              <GlassCard className="flex-1 min-w-[280px] p-6 h-[660px]">
+              {(!isMobile || mobileLecturerPanel === "queue") && (
+              <GlassCard className={!isMobile ? "flex-1 min-w-[280px] p-6 h-[660px]" : "flex-1 w-full p-5"}>
                 <View className="flex-row items-center gap-2.5 border-b border-white/[0.06] pb-3.5 mb-5">
                   <Archive color="#4F46E5" size={20} />
                   <Text className="text-lg font-black tracking-tight text-slate-50">Documents Queue</Text>
                 </View>
 
                 <ScrollView
+                  nestedScrollEnabled={true}
                   showsVerticalScrollIndicator={true}
                   className="flex-1"
                   {...({ className: "ultra-thin-scroll" } as any)}
@@ -1534,7 +1680,7 @@ export default function ConsultationsScreen() {
                             borderColor: isSelected ? "#6366F1" : "rgba(255, 255, 255, 0.04)",
                             transform: [{ scale: pressed ? 0.98 : 1 }],
                           },
-                          isSelected ? (Platform.OS === "web" ? { boxShadow: "0 0 15px rgba(99, 102, 241, 0.15)" } : { shadowColor: "#6366F1", shadowOpacity: 0.15, shadowRadius: 15 }) : {},
+                          isSelected ? (!isMobile ? { boxShadow: "0 0 15px rgba(99, 102, 241, 0.15)" } : { shadowColor: "#6366F1", shadowOpacity: 0.15, shadowRadius: 15 }) : {},
                         ]}
                       >
                         <View className="flex-row justify-between items-center">
@@ -1569,9 +1715,11 @@ export default function ConsultationsScreen() {
                   )}
                 </ScrollView>
               </GlassCard>
+              )}
 
               {/* Panel Tengah: Audio Session & AI Transcript Generator */}
-              <GlassCard className="flex-[1.8] min-w-[320px] p-6 h-[660px]">
+              {(!isMobile || mobileLecturerPanel === "transcript") && (
+              <GlassCard className={!isMobile ? "flex-[1.8] min-w-[320px] p-6 h-[660px]" : "flex-1 w-full p-5"}>
                 {selected ? (
                   <View className="flex-1 gap-4">
                     {/* Selected Document Info */}
@@ -1591,7 +1739,7 @@ export default function ConsultationsScreen() {
                           className="bg-indigo-500 rounded-xl py-2.5 px-4 items-center justify-center border border-transparent"
                           style={({ pressed }) => ({
                             transform: [{ scale: pressed ? 0.94 : 1 }],
-                            ...(Platform.OS === "web" ? { boxShadow: `0 0 12px ${isPlaying ? "#059669" : "#4F46E5"}14` } : { shadowColor: isPlaying ? "#059669" : "#4F46E5", shadowOpacity: 0.08, shadowRadius: 12 }),
+                            ...(!isMobile ? { boxShadow: `0 0 12px ${isPlaying ? "#059669" : "#4F46E5"}14` } : { shadowColor: isPlaying ? "#059669" : "#4F46E5", shadowOpacity: 0.08, shadowRadius: 12 }),
                           })}
                         >
                           <Text className="text-white font-black text-[13px]">
@@ -1623,6 +1771,7 @@ export default function ConsultationsScreen() {
                       </View>
 
                       <ScrollView
+                        nestedScrollEnabled={true}
                         showsVerticalScrollIndicator={true}
                         className="h-[120px] bg-white/[0.02] border border-white/[0.06] rounded-xl p-3"
                         {...({ className: "ultra-thin-scroll" } as any)}
@@ -1660,9 +1809,11 @@ export default function ConsultationsScreen() {
                   </View>
                 )}
               </GlassCard>
+              )}
 
               {/* Panel Kanan: Validation & Custom Feedback Form */}
-              <GlassCard className="flex-[1.4] min-w-[380px] p-6 h-[660px]">
+              {(!isMobile || mobileLecturerPanel === "validation") && (
+              <GlassCard className={!isMobile ? "flex-[1.4] min-w-[380px] p-6 h-[660px]" : "flex-1 w-full p-5"}>
                 {selected ? (
                   <View className="flex-1 gap-4">
                     <View className="border-b border-white/[0.06] pb-3">
@@ -1674,6 +1825,7 @@ export default function ConsultationsScreen() {
                     <View className="h-[180px] border-b border-black/[0.06] pb-3.5">
                       <Text className="text-slate-300 text-xs font-extrabold tracking-[0.5px] uppercase mb-2">Select Revision Item</Text>
                       <ScrollView
+                        nestedScrollEnabled={true}
                         showsVerticalScrollIndicator={true}
                         {...({ className: "ultra-thin-scroll" } as any)}
                         contentContainerStyle={{ gap: 8 }}
@@ -1732,7 +1884,7 @@ export default function ConsultationsScreen() {
                               style={{
                                 backgroundColor: feedbackCategory === "Major" ? "rgba(220, 38, 38, 0.06)" : "rgba(255, 255, 255, 0.02)",
                                 borderColor: feedbackCategory === "Major" ? "#DC2626" : "rgba(255, 255, 255, 0.04)",
-                                ...(Platform.OS === "web" ? { boxShadow: feedbackCategory === "Major" ? "0 0 10px rgba(220, 38, 38, 0.1)" : "none" } : { shadowColor: "#DC2626", shadowOpacity: feedbackCategory === "Major" ? 0.1 : 0, shadowRadius: 10 }),
+                                ...(!isMobile ? { boxShadow: feedbackCategory === "Major" ? "0 0 10px rgba(220, 38, 38, 0.1)" : "none" } : { shadowColor: "#DC2626", shadowOpacity: feedbackCategory === "Major" ? 0.1 : 0, shadowRadius: 10 }),
                               }}
                             >
                               <Text className="text-[11px] font-black tracking-[1px]" style={{ color: feedbackCategory === "Major" ? "#DC2626" : "#475569" }}>MAJOR</Text>
@@ -1743,7 +1895,7 @@ export default function ConsultationsScreen() {
                               style={{
                                 backgroundColor: feedbackCategory === "Minor" ? "rgba(99, 102, 241, 0.06)" : "rgba(255, 255, 255, 0.02)",
                                 borderColor: feedbackCategory === "Minor" ? "#6366F1" : "rgba(255, 255, 255, 0.04)",
-                                ...(Platform.OS === "web" ? { boxShadow: feedbackCategory === "Minor" ? "0 0 10px rgba(99, 102, 241, 0.1)" : "none" } : { shadowColor: "#6366F1", shadowOpacity: feedbackCategory === "Minor" ? 0.1 : 0, shadowRadius: 10 }),
+                                ...(!isMobile ? { boxShadow: feedbackCategory === "Minor" ? "0 0 10px rgba(99, 102, 241, 0.1)" : "none" } : { shadowColor: "#6366F1", shadowOpacity: feedbackCategory === "Minor" ? 0.1 : 0, shadowRadius: 10 }),
                               }}
                             >
                               <Text className="text-[11px] font-black tracking-[1px]" style={{ color: feedbackCategory === "Minor" ? "#4F46E5" : "#475569" }}>MINOR</Text>
@@ -1815,12 +1967,13 @@ export default function ConsultationsScreen() {
                   </View>
                 )}
               </GlassCard>
+              )}
             </View>
           )}
         </Page>
 
         {/* Floating Toast Notification Container (floating over layout) */}
-        <View className="z-[99999] gap-2.5 w-80" style={{ position: Platform.OS === "web" ? "fixed" : "absolute", top: 80, right: 20 }}>
+        <View className={Platform.OS === "web" ? "z-[99999] gap-2.5 w-80" : "z-[99999] gap-2.5 max-w-[85vw]"} style={{ position: Platform.OS === "web" ? "fixed" : "absolute", top: 80, right: 20 }}>
           {toasts.map(toast => {
             const translateAnim = toast.animatedValue.interpolate({
               inputRange: [0, 1],
@@ -1860,4 +2013,17 @@ export default function ConsultationsScreen() {
       </View>
     </RequireAuth>
   );
+
+  if (isMobile) {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+        style={{ flex: 1 }}
+      >
+        {content}
+      </KeyboardAvoidingView>
+    );
+  }
+  return content;
 }

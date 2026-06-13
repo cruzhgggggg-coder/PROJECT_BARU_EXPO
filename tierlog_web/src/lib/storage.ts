@@ -1,4 +1,4 @@
-﻿import { Platform } from "react-native";
+import { Platform } from "react-native";
 
 type AuthSnapshot = {
   accessToken: string | null;
@@ -89,7 +89,7 @@ export async function saveAuthSnapshot(snapshot: AuthSnapshot) {
       await AsyncStorage.setItem(AUTH_KEY, data);
     }
   } catch (err) {
-    console.error("Failed to save auth snapshot:", err);
+    console.warn("Failed to save auth snapshot:", err);
   }
 }
 
@@ -109,6 +109,6 @@ export async function clearAuthSnapshot() {
       await AsyncStorage.removeItem(AUTH_KEY);
     }
   } catch (err) {
-    console.error("Failed to clear auth snapshot:", err);
+    console.warn("Failed to clear auth snapshot:", err);
   }
 }

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Text, View, Platform, Pressable, TextInput } from "react-native";
-import { Cpu, CheckCircle, AlertCircle, Clock, Key, Radio, Settings, Zap } from "lucide-react-native";
+import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { Cpu, CheckCircle, AlertCircle, Clock, Key, Radio, Settings, Zap, ChevronDown, ChevronRight } from "lucide-react-native";
 
 import { GlassCard } from "@/src/components/ui/glass-card";
 import { NavBar } from "@/src/components/NavBar";
 import { RequireAuth } from "@/src/components/RequireAuth";
 import { Button, Field, Heading, Page, Badge } from "@/src/components/ui";
 import { useAuth } from "@/src/providers/AuthProvider";
+import { useIsMobile } from "@/src/hooks";
 import type { User } from "@/src/types";
 
 const PROVIDER_MODELS: Record<string, { label: string; value: string; desc: string }[]> = {
@@ -76,6 +77,7 @@ const PROVIDER_INFO: Record<string, {
 const PROVIDER_ORDER = ["openai", "gemini", "anthropic", "nvidia", "groq"];
 
 export default function AIGatewayScreen() {
+  const isMobile = useIsMobile();
   const { api, user, setUser } = useAuth();
   const [openaiKey, setOpenaiKey] = useState(user?.openai_key ?? "");
   const [geminiKey, setGeminiKey] = useState(user?.gemini_key ?? "");
@@ -94,6 +96,11 @@ export default function AIGatewayScreen() {
   const [dynamicNvidiaModels, setDynamicNvidiaModels] = useState<{ label: string; value: string; desc: string }[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [fetchError, setFetchError] = useState("");
+  const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
+
+  const toggleProvider = (provider: string) => {
+    setExpandedProviders((prev) => ({ ...prev, [provider]: !prev[provider] }));
+  };
 
   // Sync state when user object changes (e.g. after refresh or save)
   useEffect(() => {
@@ -172,7 +179,7 @@ export default function AIGatewayScreen() {
         setDynamicNvidiaModels([]);
       }
     } catch (err) {
-      console.error("Failed to fetch dynamic NVIDIA models:", err);
+      console.warn("Failed to fetch dynamic NVIDIA models:", err);
       setFetchError("Failed to fetch dynamic model list from NVIDIA NIM.");
       setDynamicNvidiaModels([]);
     } finally {
@@ -297,9 +304,9 @@ export default function AIGatewayScreen() {
     return PROVIDER_MODELS[provider] || [];
   };
 
-  return (
+  const content = (
     <RequireAuth>
-      <Page>
+      <Page contentContainerStyle={{ paddingHorizontal: isMobile ? 12 : 24, paddingVertical: isMobile ? 16 : 32 }}>
         <NavBar />
 
         <Heading
@@ -309,7 +316,7 @@ export default function AIGatewayScreen() {
 
         <View className="gap-6 mt-3 w-full">
 
-          <GlassCard className="p-8">
+          <GlassCard className={isMobile ? "p-4" : "p-8"}>
             <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-5">
               <Zap color="#6366F1" size={20} />
               <Text className="text-lg font-black tracking-tight text-[#F8FAFC]">Preferred Model</Text>
@@ -320,8 +327,8 @@ export default function AIGatewayScreen() {
                 <Clock color="#4F46E5" size={16} />
                 <Text className="text-[11px] font-extrabold tracking-[1.5px] text-[#94A3B8]">ACTIVE MODEL</Text>
               </View>
-              <View className="flex-row items-center gap-2.5">
-                <Text className="text-[15px] font-black tracking-tight text-[#F8FAFC]">
+              <View className="flex-row items-center gap-2.5 flex-wrap">
+                <Text className="text-[15px] font-black tracking-tight text-[#F8FAFC] flex-shrink min-w-0">
                   {getActiveModelLabel()}
                 </Text>
                 <Badge 
@@ -346,20 +353,24 @@ export default function AIGatewayScreen() {
               const models = isProvider ? getModelsForProvider(providerKey) : [];
 
               return (
-                <GlassCard key={providerKey} className="p-6">
+                <GlassCard key={providerKey} className={isMobile ? "p-4" : "p-6"}>
                   <View className="border-b border-white/[0.06] pb-4 mb-4">
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-row items-center gap-2.5">
+                    <Pressable
+                      onPress={isMobile ? () => toggleProvider(providerKey) : undefined}
+                      disabled={!isMobile}
+                    >
+                    <View className="flex-row items-center justify-between gap-3 w-full">
+                      <View className="flex-row items-center gap-2.5 flex-1 min-w-0">
                         <View
-                          className="h-8 w-8 rounded-lg items-center justify-center"
+                          className="h-8 w-8 rounded-lg items-center justify-center shrink-0"
                           style={{ backgroundColor: `${info.color}18` }}
                         >
                           <Text className="text-sm font-black" style={{ color: info.color }}>
                             {info.name.charAt(0)}
                           </Text>
                         </View>
-                        <View>
-                          <View className="flex-row items-center gap-2">
+                        <View className="flex-1 min-w-0">
+                          <View className="flex-row items-center gap-2 flex-wrap">
                             <Text className="text-[14px] font-black tracking-tight text-[#F8FAFC]">
                               {info.name}
                             </Text>
@@ -369,13 +380,25 @@ export default function AIGatewayScreen() {
                               </View>
                             )}
                           </View>
-                          <Text className="text-[11px] font-medium text-[#94A3B8]">{info.description}</Text>
+                          <Text className="text-[11px] font-medium text-[#94A3B8]" numberOfLines={2}>{info.description}</Text>
                         </View>
                       </View>
-                      {renderProviderStatus(providerKey)}
+                      <View className="flex-row items-center gap-2 shrink-0">
+                        {renderProviderStatus(providerKey)}
+                        {isMobile && (
+                          expandedProviders[providerKey] ? (
+                            <ChevronDown color="#94A3B8" size={16} />
+                          ) : (
+                            <ChevronRight color="#94A3B8" size={16} />
+                          )
+                        )}
+                      </View>
                     </View>
+                    </Pressable>
                   </View>
 
+                  {!isMobile || expandedProviders[providerKey] ? (
+                  <>
                   <View className="mb-4">
                     <View className="flex-row items-center gap-1.5 mb-2">
                       <Key color="#94A3B8" size={12} />
@@ -520,13 +543,15 @@ export default function AIGatewayScreen() {
                       </Text>
                     </View>
                   )}
+                  </>
+                  ) : null}
                 </GlassCard>
               );
             })}
           </View>
 
           {showCustomInput && getActiveModelProvider() !== "nvidia" && (
-            <GlassCard className="p-6">
+            <GlassCard className={isMobile ? "p-4" : "p-6"}>
               <View className="flex-row items-center gap-2.5 mb-4">
                 <Settings color="#6366F1" size={18} />
                 <Text className="text-[14px] font-black tracking-tight text-[#F8FAFC]">Custom Model</Text>
@@ -551,18 +576,18 @@ export default function AIGatewayScreen() {
             </GlassCard>
           )}
 
-          <GlassCard className="p-6">
+          <GlassCard className={isMobile ? "p-4" : "p-6"}>
             <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-5">
               <CheckCircle color="#059669" size={20} />
               <Text className="text-lg font-black tracking-tight text-[#F8FAFC]">Active Configuration</Text>
             </View>
             <View className="gap-3">
-              <View className="flex-row items-center justify-between bg-white/[0.02] border border-white/[0.06] rounded-xl px-4 py-3">
+              <View className={`${isMobile ? "flex-col items-start gap-2" : "flex-row items-center justify-between"} bg-white/[0.02] border border-white/[0.06] rounded-xl px-4 py-3`}>
                 <View className="flex-row items-center gap-2.5">
                   <View className={`h-2 w-2 rounded-full ${hasAnyLlmKey ? "bg-[#059669]" : "bg-[#DC2626]"}`} />
                   <Text className="text-[12px] font-bold text-[#94A3B8]">LLM Active</Text>
                 </View>
-                <View className="flex-row items-center gap-2">
+                <View className="flex-row items-center gap-2 flex-wrap">
                   <Text className="text-[13px] font-black text-[#F8FAFC]">
                     {getActiveModelLabel()}
                   </Text>
@@ -571,12 +596,12 @@ export default function AIGatewayScreen() {
                   )}
                 </View>
               </View>
-              <View className="flex-row items-center justify-between bg-white/[0.02] border border-white/[0.06] rounded-xl px-4 py-3">
+              <View className={`${isMobile ? "flex-col items-start gap-2" : "flex-row items-center justify-between"} bg-white/[0.02] border border-white/[0.06] rounded-xl px-4 py-3`}>
                 <View className="flex-row items-center gap-2.5">
                   <View className={`h-2 w-2 rounded-full ${hasKey("groq") ? "bg-[#059669]" : "bg-[#DC2626]"}`} />
                   <Text className="text-[12px] font-bold text-[#94A3B8]">Voice Active</Text>
                 </View>
-                <View className="flex-row items-center gap-2">
+                <View className="flex-row items-center gap-2 flex-wrap">
                   <Text className="text-[13px] font-black text-[#F8FAFC]">Groq (Whisper STT)</Text>
                   {hasKey("groq") ? (
                     <Badge text="READY" color="#059669" />
@@ -614,4 +639,13 @@ export default function AIGatewayScreen() {
       </Page>
     </RequireAuth>
   );
+
+  if (Platform.OS !== "web") {
+    return (
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+        {content}
+      </KeyboardAvoidingView>
+    );
+  }
+  return content;
 }

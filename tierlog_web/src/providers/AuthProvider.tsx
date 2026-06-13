@@ -152,9 +152,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAccessToken(nextAccess);
     setRefreshToken(nextRefresh);
     if (nextUser || nextAccess || nextRefresh) {
-      saveAuthSnapshot({ user: nextUser, accessToken: nextAccess, refreshToken: nextRefresh }).catch(console.error);
+      saveAuthSnapshot({ user: nextUser, accessToken: nextAccess, refreshToken: nextRefresh }).catch((err) =>
+        console.warn("Failed to save auth snapshot:", err)
+      );
     } else {
-      clearAuthSnapshot().catch(console.error);
+      clearAuthSnapshot().catch((err) =>
+        console.warn("Failed to clear auth snapshot:", err)
+      );
     }
   }, []);
 
@@ -162,9 +166,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser((prev) => {
       const resolved = typeof nextUser === "function" ? (nextUser as Function)(prev) : nextUser;
       if (resolved) {
-        saveAuthSnapshot({ user: resolved, accessToken, refreshToken }).catch(console.error);
+        saveAuthSnapshot({ user: resolved, accessToken, refreshToken }).catch((err) =>
+          console.warn("Failed to save auth snapshot:", err)
+        );
       } else {
-        clearAuthSnapshot().catch(console.error);
+        clearAuthSnapshot().catch((err) =>
+          console.warn("Failed to clear auth snapshot:", err)
+        );
       }
       return resolved;
     });
@@ -235,7 +243,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setBooting(false);
         }
       } catch (err) {
-        console.error("Boot failed:", err);
+        console.warn("Boot failed:", err);
         await clearAuthSnapshot().catch(() => {});
       } finally {
         setBooting(false);
@@ -271,7 +279,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         persist(data.user, data.access_token, data.refresh_token);
         return data.access_token as string;
       } catch (err) {
-        console.error("Token refresh failed:", err);
+        console.warn("Token refresh failed:", err);
         return null;
       } finally {
         refreshPromiseRef.current = null;

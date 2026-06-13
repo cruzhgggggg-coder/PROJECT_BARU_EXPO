@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Text, View } from "react-native";
 import { Lock, CheckCircle, AlertCircle } from "lucide-react-native";
 
 import { GlassCard } from "@/src/components/ui/glass-card";
@@ -7,8 +7,10 @@ import { NavBar } from "@/src/components/NavBar";
 import { RequireAuth } from "@/src/components/RequireAuth";
 import { Button, Field, Heading, Page } from "@/src/components/ui";
 import { useAuth } from "@/src/providers/AuthProvider";
+import { useIsMobile } from "@/src/hooks";
 
 export default function SecurityScreen() {
+  const isMobile = useIsMobile();
   const { api } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
@@ -36,9 +38,9 @@ export default function SecurityScreen() {
     }
   };
 
-  return (
+  const content = (
     <RequireAuth>
-      <Page>
+      <Page contentContainerStyle={{ paddingHorizontal: isMobile ? 12 : 24, paddingVertical: isMobile ? 16 : 32 }}>
         <NavBar />
 
         <Heading
@@ -46,8 +48,8 @@ export default function SecurityScreen() {
           subtitle="Manage your account password and security settings."
         />
 
-        <View className="flex-row gap-8 flex-wrap items-start mt-3">
-          <View className="flex-1 min-w-[300px] gap-4">
+        <View className={`${isMobile ? "flex-col gap-4" : "flex-row gap-8 flex-wrap"} items-start mt-3`}>
+          <View className={isMobile ? "w-full gap-2" : "flex-1 min-w-[300px] gap-4"}>
             <View className="flex-row items-center gap-2 self-start bg-[rgba(5,150,105,0.08)] border border-[rgba(5,150,105,0.15)] px-3 py-1.5 rounded-lg">
               <Lock color="#059669" size={16} />
               <Text className="text-[10px] font-black tracking-[2px] text-[#059669]">ENCRYPTION ACTIVE</Text>
@@ -66,8 +68,8 @@ export default function SecurityScreen() {
             </View>
           </View>
 
-          <View className="flex-[1.2] min-w-[320px]">
-            <GlassCard className="p-8">
+          <View className={isMobile ? "w-full" : "flex-[1.2] min-w-[320px]"}>
+            <GlassCard className={isMobile ? "p-4" : "p-8"}>
               <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-6">
                 <Lock color="#4F46E5" size={20} />
                 <Text className="text-lg font-black tracking-tight text-[#F8FAFC]">Update Credentials</Text>
@@ -114,4 +116,13 @@ export default function SecurityScreen() {
       </Page>
     </RequireAuth>
   );
+
+  if (Platform.OS !== "web") {
+    return (
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+        {content}
+      </KeyboardAvoidingView>
+    );
+  }
+  return content;
 }

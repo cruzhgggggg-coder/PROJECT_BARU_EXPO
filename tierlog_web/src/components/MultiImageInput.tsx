@@ -61,7 +61,7 @@ function MultiImageInputNative({
         onFilesChange([...files, ...newFiles]);
       }
     } catch (err) {
-      console.error("Image picker error:", err);
+      console.warn("Image picker error:", err);
     }
   };
 
@@ -82,7 +82,7 @@ function MultiImageInputNative({
         onFilesChange([...files, ...newFiles]);
       }
     } catch (err) {
-      console.error("Document picker error:", err);
+      console.warn("Document picker error:", err);
     }
   };
 

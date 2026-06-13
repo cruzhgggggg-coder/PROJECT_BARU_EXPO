@@ -35,7 +35,7 @@ function WebFileInputNative({
         onFileSelect(fileObj);
       }
     } catch (err) {
-      console.error("Document picker error:", err);
+      console.warn("Document picker error:", err);
     }
   };
 

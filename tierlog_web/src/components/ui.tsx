@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 import { MotionDiv } from "@/src/lib/motion";
 import { cn } from "@/src/lib/utils";
 import { fadeIn } from "@/src/lib/animations";
@@ -15,33 +15,66 @@ export function Page({
   children,
   fullWidth = false,
   showBackground = true,
+  showFloatingShapes = true,
   style,
   contentContainerStyle,
+  onRefresh,
+  refreshing = false,
+  scrollable = true,
 }: {
   children: React.ReactNode;
   fullWidth?: boolean;
   showBackground?: boolean;
+  showFloatingShapes?: boolean;
   style?: any;
   contentContainerStyle?: any;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  scrollable?: boolean;
 }) {
+  const content = (
+    <MotionDiv initial="hidden" animate="visible" variants={fadeIn} style={scrollable ? undefined : { flex: 1, display: "flex", flexDirection: "column" }}>
+      <View className={cn("relative flex flex-col w-full gap-6", fullWidth ? "" : "max-w-[1200px] mx-auto", scrollable ? "" : "flex-1 h-full")}>
+        {showBackground && (
+          <>
+            <GradientBackground />
+            {showFloatingShapes && <FloatingShapes className="opacity-30" />}
+            <MouseGlow />
+          </>
+        )}
+        {children}
+      </View>
+    </MotionDiv>
+  );
+
+  if (!scrollable) {
+    return (
+      <View
+        className="flex-1 bg-[#020617]"
+        style={[{ paddingVertical: 16, paddingHorizontal: 16, height: "100%", display: "flex", flexDirection: "column" }, style]}
+      >
+        {content}
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       className="flex-1 bg-[#020617]"
       contentContainerStyle={[{ paddingVertical: 32, paddingHorizontal: 24, minHeight: "100%" as any }, contentContainerStyle]}
       style={style}
+      refreshControl={
+        onRefresh && Platform.OS !== "web" ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#6366F1"
+            colors={["#6366F1"]}
+          />
+        ) : undefined
+      }
     >
-      <MotionDiv initial="hidden" animate="visible" variants={fadeIn}>
-        <View className={cn("relative flex flex-col w-full gap-6", fullWidth ? "" : "max-w-[1200px] mx-auto")}>
-          {showBackground && (
-            <>
-              <GradientBackground />
-              <FloatingShapes className="opacity-30" />
-              <MouseGlow />
-            </>
-          )}
-          {children}
-        </View>
-      </MotionDiv>
+      {content}
     </ScrollView>
   );
 }
@@ -150,7 +183,12 @@ export function Badge({ text, color }: { text: string; color?: string }) {
       className="self-start rounded-lg px-2.5 py-1.5 border"
       style={{ borderColor: `${badgeColor}22`, backgroundColor: `${badgeColor}0A` }}
     >
-      <Text className="text-[10px] font-extrabold uppercase tracking-widest" style={{ color: badgeColor }}>
+      <Text
+        className="text-[10px] font-extrabold uppercase tracking-widest"
+        numberOfLines={1}
+        ellipsizeMode="tail"
+        style={{ color: badgeColor }}
+      >
         {text}
       </Text>
     </View>
@@ -162,20 +200,33 @@ export function StatCard({
   label,
   value,
   glowColor = "#4F46E5",
+  className,
 }: {
   label: string;
   value: string | number;
   glowColor?: string;
+  className?: string;
 }) {
+  const valueStr = String(value);
+  const isPercent = valueStr.endsWith("%");
+  const cleanValue = valueStr.replace(/[^0-9.-]/g, "");
+  const numericValue = Number(cleanValue) || 0;
+
   return (
     <Pressable
-      className="flex-1 min-w-[45%] relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 sm:p-6"
+      className={cn(
+        "flex-1 min-w-[45%] relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 sm:p-6",
+        className
+      )}
       style={({ pressed }) => ({
         transform: [{ translateY: pressed ? -1 : 0 }],
       })}
     >
       <Text className="text-[11px] font-bold uppercase tracking-widest text-[#94A3B8]">{label}</Text>
-      <Text className="mt-2.5 text-[28px] sm:text-[32px] font-black tracking-tight" style={{ color: glowColor }}><AnimatedCounter value={Number(value)} /></Text>
+      <Text className="mt-2.5 text-[28px] sm:text-[32px] font-black tracking-tight" style={{ color: glowColor }}>
+        <AnimatedCounter value={numericValue} />
+        {isPercent ? "%" : ""}
+      </Text>
       <View
         className="absolute -right-4 -bottom-4 h-[72px] w-[72px] rounded-full"
         style={{ backgroundColor: `${glowColor}08` }}

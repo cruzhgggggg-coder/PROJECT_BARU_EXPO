@@ -10,9 +10,11 @@ import { GlassCard } from "@/src/components/ui/glass-card";
 import { ElegantButton } from "@/src/components/ui/elegant-button";
 import { AuthPageLayout } from "@/src/components/ui/auth-page-layout";
 import { Shield } from "lucide-react-native";
+import { useIsMobile } from "@/src/hooks";
 
 export default function RegisterScreen() {
   const { register, user, api } = useAuth();
+  const isMobile = useIsMobile();
   const [role, setRole] = useState<"student" | "lecturer">("student");
   const [lecturers, setLecturers] = useState<any[]>([]);
   const [showLecturerDropdown, setShowLecturerDropdown] = useState(false);
@@ -45,7 +47,7 @@ export default function RegisterScreen() {
           }
         }
       } catch (err) {
-        console.error("Failed to load lecturers:", err);
+        console.warn("Failed to load lecturers:", err);
       }
     };
     void fetchLecturers();
@@ -131,7 +133,10 @@ export default function RegisterScreen() {
         </>
       }
       rightContent={
-        <GlassCard className="p-8">
+        <GlassCard
+          className={`${isMobile ? "p-5" : "p-8"} ${showLecturerDropdown ? "pb-48" : ""}`}
+          style={{ zIndex: showLecturerDropdown ? 50 : 1 }}
+        >
           <Text className="text-xl font-black tracking-tight text-white mb-1">
             Registration Console
           </Text>
@@ -168,7 +173,7 @@ export default function RegisterScreen() {
           </View>
 
           {/* Form Fields */}
-          <View className="gap-1" style={{ zIndex: showLecturerDropdown ? 100 : 1 }}>
+          <View className="gap-1" style={{ zIndex: showLecturerDropdown ? 100 : 1, elevation: showLecturerDropdown ? 100 : 1 }}>
             <Field
               label="Full Name & Credentials"
               placeholder="Jonathan Doe, M.Sc."
@@ -192,8 +197,14 @@ export default function RegisterScreen() {
             />
 
             {role === "student" ? (
-              <View className="gap-1" style={{ zIndex: showLecturerDropdown ? 101 : 1 }}>
-                <View className="flex-row gap-3" style={{ zIndex: showLecturerDropdown ? 102 : 1 }}>
+              <View className="gap-1" style={{ zIndex: showLecturerDropdown ? 101 : 1, elevation: showLecturerDropdown ? 101 : 1 }}>
+                <View
+                  className={isMobile ? "flex-col gap-2" : "flex-row gap-3"}
+                  style={{
+                    zIndex: showLecturerDropdown ? 102 : 1,
+                    elevation: showLecturerDropdown ? 102 : 1,
+                  }}
+                >
                   <View className="flex-1">
                     <Field
                       label="Student ID (NIM)"
@@ -202,7 +213,13 @@ export default function RegisterScreen() {
                       onChangeText={(v) => patch("nim", v)}
                     />
                   </View>
-                  <View className="flex-1 relative z-[999]">
+                  <View
+                    className="flex-1 relative"
+                    style={{
+                      zIndex: showLecturerDropdown ? 999 : 1,
+                      elevation: showLecturerDropdown ? 999 : 1,
+                    }}
+                  >
                     <Text className="text-xs font-bold uppercase tracking-wider pl-0.5 text-[#94A3B8] mb-1.5">
                       Academic Advisor
                     </Text>
@@ -221,8 +238,12 @@ export default function RegisterScreen() {
 
                     {showLecturerDropdown && (
                       <GlassCard
-                        className="absolute top-[54px] left-0 right-0 max-h-[200px] p-2 z-[9999] bg-slate-950/95 border-white/[0.08]"
-                        style={{ boxShadow: "0 10px 15px rgba(0,0,0,0.3)" }}
+                        className="absolute top-[54px] left-0 right-0 max-h-[200px] p-2 bg-slate-950/95 border-white/[0.08]"
+                        style={{
+                          boxShadow: "0 10px 15px rgba(0,0,0,0.3)",
+                          zIndex: 9999,
+                          elevation: 9999,
+                        }}
                       >
                         <ScrollView
                           nestedScrollEnabled={true}
@@ -286,7 +307,7 @@ export default function RegisterScreen() {
               </View>
             ) : (
               <View className="gap-1">
-                <View className="flex-row gap-3">
+                <View className={isMobile ? "flex-col gap-2" : "flex-row gap-3"}>
                   <View className="flex-1">
                     <Field
                       label="Advisor ID Number (NIP)"
@@ -340,9 +361,12 @@ export default function RegisterScreen() {
     />
   );
 
-  if (RNPlatform.OS !== "web") {
+  if (isMobile) {
     return (
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+        behavior={RNPlatform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
+      >
         {content}
       </KeyboardAvoidingView>
     );

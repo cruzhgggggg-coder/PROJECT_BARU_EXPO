@@ -13,7 +13,8 @@
         "backgroundColor": "#020617"
       },
       "package": "com.tierlog.app",
-      "permissions": ["INTERNET"]
+      "permissions": ["INTERNET"],
+      "usesCleartextTraffic": true
     },
     "web": {
       "bundler": "metro",
