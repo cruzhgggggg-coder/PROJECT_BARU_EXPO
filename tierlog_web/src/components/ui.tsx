@@ -34,7 +34,7 @@ export function Page({
 }) {
   const content = (
     <MotionDiv initial="hidden" animate="visible" variants={fadeIn} style={scrollable ? undefined : { flex: 1, display: "flex", flexDirection: "column" }}>
-      <View className={cn("relative flex flex-col w-full gap-6", fullWidth ? "" : "max-w-[1200px] mx-auto", scrollable ? "" : "flex-1 h-full")}>
+      <View className={cn("relative flex flex-col w-full gap-6", fullWidth ? "" : "max-w-[1200px] mx-auto", scrollable ? "" : (Platform.OS === "web" ? "flex-1 h-full" : "flex-1"))}>
         {showBackground && (
           <>
             <GradientBackground />
@@ -51,7 +51,7 @@ export function Page({
     return (
       <View
         className="flex-1 bg-[#020617]"
-        style={[{ paddingVertical: 16, paddingHorizontal: 16, height: "100%", display: "flex", flexDirection: "column" }, style]}
+        style={[{ paddingVertical: 16, paddingHorizontal: 16, ...(Platform.OS === "web" ? { height: "100%" } : { flex: 1 }), display: "flex", flexDirection: "column" }, style]}
       >
         {content}
       </View>

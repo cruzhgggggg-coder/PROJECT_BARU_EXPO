@@ -2306,11 +2306,21 @@ export default function LecturerDashboardScreen() {
         )}
       </Page>
 
-      <View className="gap-2.5 w-80" style={{ position: Platform.OS === "web" ? "fixed" : "absolute", top: 80, right: 20, zIndex: 99999 }}>
+      <View 
+        className="z-[99999] gap-2.5" 
+        style={{ 
+          position: Platform.OS === "web" ? "fixed" : "absolute", 
+          top: isMobile ? 60 : 80, 
+          left: isMobile ? 16 : undefined,
+          right: isMobile ? 16 : 20, 
+          width: isMobile ? undefined : 320,
+          maxWidth: isMobile ? undefined : 320,
+        }}
+      >
         {toasts.map(toast => {
           const translateAnim = toast.animatedValue.interpolate({
             inputRange: [0, 1],
-            outputRange: [340, 0],
+            outputRange: [isMobile ? -100 : 340, 0],
           });
           const opacityAnim = toast.animatedValue;
           
@@ -2325,13 +2335,17 @@ export default function LecturerDashboardScreen() {
           return (
             <Animated.View
               key={toast.id}
-              className="p-4 rounded-[14px] border border-white/[0.08] bg-slate-900/[0.95] flex-row gap-3 items-center"
+              className="p-4 rounded-[14px] border border-white/[0.1] bg-slate-900/[0.95] flex-row gap-3 items-center"
               style={{
                 opacity: opacityAnim,
-                transform: [{ translateX: translateAnim }],
+                transform: [
+                  isMobile 
+                    ? { translateY: translateAnim } 
+                    : { translateX: translateAnim }
+                ],
                 shadowColor: color,
-                shadowOpacity: 0.1,
-                shadowRadius: 10,
+                shadowOpacity: 0.12,
+                shadowRadius: 16,
               }}
             >
               {toast.type === "chat" ? (

@@ -3,6 +3,7 @@ package koneksi
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"testing_go/models"
@@ -53,6 +54,9 @@ func ConnectDatabase() {
 		_ = migrator.DropColumn(&models.FeedbackItem{}, "parent_id")
 	}
 
+	// P-7: AutoMigrate is used for development convenience.
+	// For production, replace with versioned migration files (e.g., golang-migrate/migrate)
+	// to avoid unintended schema changes on server restart.
 	if err := database.AutoMigrate(
 		&models.User{},
 		&models.Lecturer{},
@@ -81,8 +85,15 @@ func ConnectDatabase() {
 		_ = migrator.DropColumn(&models.FeedbackItem{}, "consultation_log_id")
 	}
 
-	// Ensure the status enum in feedback_items includes 'Validated'
-	_ = database.Exec("ALTER TABLE feedback_items MODIFY COLUMN status ENUM('Fixed', 'Pending', 'Validated') NOT NULL DEFAULT 'Pending'").Error
+	// Q-4: Only run ALTER TABLE if the column type needs updating (check first)
+	var columnType string
+	if err := database.Raw("SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'feedback_items' AND COLUMN_NAME = 'status'").Scan(&columnType).Error; err == nil {
+		if !strings.Contains(columnType, "Validated") {
+			if alterErr := database.Exec("ALTER TABLE feedback_items MODIFY COLUMN status ENUM('Fixed', 'Pending', 'Validated') NOT NULL DEFAULT 'Pending'").Error; alterErr != nil {
+				fmt.Printf("[DB] Warning: Failed to update status enum: %v\n", alterErr)
+			}
+		}
+	}
 
 	// Production-grade connection pooling optimization
 	sqlDB, err := database.DB()

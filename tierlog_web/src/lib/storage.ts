@@ -9,7 +9,7 @@ type AuthSnapshot = {
 const AUTH_KEY = "tierlog.auth";
 
 // ─── Storage Strategy ───────────────────────────────────────
-// Web:       localStorage (synchronous, no extra deps)
+// Web:       sessionStorage (F-1: reduced XSS persistence window)
 // Native:    expo-secure-store (encrypted, production)
 //            Falls back to @react-native-async-storage/async-storage (Expo Go / dev)
 // ─────────────────────────────────────────────────────────────
@@ -43,8 +43,9 @@ async function getStorageBackend(): Promise<"secure" | "async" | null> {
 
 export async function loadAuthSnapshot(): Promise<AuthSnapshot | null> {
   if (Platform.OS === "web") {
-    if (typeof localStorage === "undefined") return null;
-    const raw = localStorage.getItem(AUTH_KEY);
+    if (typeof sessionStorage === "undefined") return null;
+    // F-1: Check sessionStorage first, then fall back to localStorage for migration
+    const raw = sessionStorage.getItem(AUTH_KEY) ?? (typeof localStorage !== "undefined" ? localStorage.getItem(AUTH_KEY) : null);
     if (!raw) return null;
     try {
       return JSON.parse(raw) as AuthSnapshot;
@@ -74,7 +75,11 @@ export async function loadAuthSnapshot(): Promise<AuthSnapshot | null> {
 export async function saveAuthSnapshot(snapshot: AuthSnapshot) {
   if (Platform.OS === "web") {
     if (typeof localStorage === "undefined") return;
-    localStorage.setItem(AUTH_KEY, JSON.stringify(snapshot));
+    // F-1: Use sessionStorage instead of localStorage for web to reduce XSS persistence window.
+    // Tokens are cleared when the browser tab/session closes.
+    // TODO: For maximum security, store refresh_token in httpOnly cookie set by the server.
+    // Only store the access_token in sessionStorage (short-lived, 2h).
+    sessionStorage.setItem(AUTH_KEY, JSON.stringify(snapshot));
     return;
   }
 
@@ -95,8 +100,9 @@ export async function saveAuthSnapshot(snapshot: AuthSnapshot) {
 
 export async function clearAuthSnapshot() {
   if (Platform.OS === "web") {
-    if (typeof localStorage === "undefined") return;
-    localStorage.removeItem(AUTH_KEY);
+    // F-1: Clear from both storage types
+    try { sessionStorage.removeItem(AUTH_KEY); } catch {}
+    try { localStorage.removeItem(AUTH_KEY); } catch {}
     return;
   }
 

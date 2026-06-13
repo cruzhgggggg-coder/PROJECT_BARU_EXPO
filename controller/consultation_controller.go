@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"strings"
 	"testing_go/koneksi"
+	"testing_go/middleware"
 	"testing_go/models"
 	"testing_go/utils"
 
@@ -19,12 +19,12 @@ import (
 
 // POST /api/consultation
 func CreateConsultation(c *gin.Context) {
-	userIDStr := c.PostForm("user_id")
-	userID, err := strconv.ParseUint(userIDStr, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user_id"})
+	currentUser := middleware.CurrentUser(c)
+	if currentUser == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	userID := currentUser.ID
 
 	// Find the student profile for this user
 	var student models.Student
@@ -36,6 +36,12 @@ func CreateConsultation(c *gin.Context) {
 	audioFile, err := c.FormFile("audio")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Audio file is required"})
+		return
+	}
+
+	// Validate audio file
+	if err := validateUploadedFile(audioFile, []string{".mp3", ".wav", ".m4a", ".ogg", ".webm"}, 100*1024*1024); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Audio file invalid: %v", err)})
 		return
 	}
 
@@ -55,6 +61,13 @@ func CreateConsultation(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Paper file (.docx) is required"})
 		return
 	}
+
+	// Validate paper file
+	if err := validateUploadedFile(paperFile, []string{".docx"}, 50*1024*1024); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Paper file invalid: %v", err)})
+		return
+	}
+
 	paperFilename := fmt.Sprintf("%d_%s", timestamp, paperFile.Filename)
 	paperPath := filepath.Join("storage", "paper", paperFilename)
 	if err := c.SaveUploadedFile(paperFile, paperPath); err != nil {
@@ -117,19 +130,20 @@ func CreateConsultation(c *gin.Context) {
 
 // GET /api/consultation
 func GetConsultations(c *gin.Context) {
-	userID := c.Query("user_id")
+	currentUser := middleware.CurrentUser(c)
+	if currentUser == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	var logs []models.ConsultationLog
 	
 	query := koneksi.DB.Preload("FeedbackItems").Preload("Student")
 	
-	if userID != "" {
-		// Filter by user_id via student profile
-		query = query.Joins("JOIN students ON students.id = consultation_logs.student_id").
-			Where("students.user_id = ?", userID)
-	}
+	query = query.Joins("JOIN students ON students.id = consultation_logs.student_id").
+		Where("students.user_id = ?", currentUser.ID)
 
 	if err := query.Find(&logs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 	c.JSON(http.StatusOK, logs)
@@ -137,7 +151,11 @@ func GetConsultations(c *gin.Context) {
 
 // GET /api/stats
 func GetStats(c *gin.Context) {
-	userID := c.Query("user_id")
+	currentUser := middleware.CurrentUser(c)
+	if currentUser == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	
 	var totalLogs int64
 	var totalFeedback int64
@@ -148,19 +166,15 @@ func GetStats(c *gin.Context) {
 	logQuery := koneksi.DB.Model(&models.ConsultationLog{})
 	feedbackQuery := koneksi.DB.Model(&models.FeedbackItem{})
 
-	if userID != "" {
-		logQuery = logQuery.Joins("JOIN students ON students.id = consultation_logs.student_id").
-			Where("students.user_id = ?", userID)
-		
-		feedbackQuery = feedbackQuery.Joins("JOIN consultation_logs ON consultation_logs.id = feedback_items.log_id").
-			Joins("JOIN students ON students.id = consultation_logs.student_id").
-			Where("students.user_id = ?", userID)
-	}
+	logQuery = logQuery.Joins("JOIN students ON students.id = consultation_logs.student_id").
+		Where("students.user_id = ?", currentUser.ID)
+	feedbackQuery = feedbackQuery.Joins("JOIN consultation_logs ON consultation_logs.id = feedback_items.log_id").
+		Joins("JOIN students ON students.id = consultation_logs.student_id").
+		Where("students.user_id = ?", currentUser.ID)
 
 	logQuery.Count(&totalLogs)
 	feedbackQuery.Count(&totalFeedback)
 	
-	// Create copies for filtered counts
 	majorQuery := feedbackQuery.Session(&gorm.Session{}).Where("category = ?", "Major")
 	minorQuery := feedbackQuery.Session(&gorm.Session{}).Where("category = ?", "Minor")
 	pendingQuery := feedbackQuery.Session(&gorm.Session{}).Where("status = ?", "Pending")
@@ -184,6 +198,16 @@ func GetStats(c *gin.Context) {
 
 // PUT /api/feedback/:id/status
 func UpdateFeedbackStatus(c *gin.Context) {
+	currentUser := middleware.CurrentUser(c)
+	if currentUser == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	if currentUser.Role != models.RoleLecturer {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only lecturers can update feedback status"})
+		return
+	}
+
 	id := c.Param("id")
 	var req struct {
 		Status string `json:"status" binding:"required"`
@@ -194,8 +218,24 @@ func UpdateFeedbackStatus(c *gin.Context) {
 		return
 	}
 
+	if req.Status != string(models.StatusValidated) && req.Status != string(models.StatusPending) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Lecturers can only set status to Validated or Pending"})
+		return
+	}
+
+	var feedback models.FeedbackItem
+	if err := koneksi.DB.First(&feedback, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Feedback item not found"})
+		return
+	}
+
+	if _, err := accessibleLog(currentUser, feedback.ConsultationLogID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
+
 	if err := koneksi.DB.Model(&models.FeedbackItem{}).Where("id = ?", id).Update("status", req.Status).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 
@@ -204,14 +244,22 @@ func UpdateFeedbackStatus(c *gin.Context) {
 
 // GET /api/lecturer/:id/consultations
 func GetLecturerConsultations(c *gin.Context) {
-	lecturerID := c.Param("id")
+	currentUser := middleware.CurrentUser(c)
+	if currentUser == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	if currentUser.Role != models.RoleLecturer || currentUser.Lecturer == nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only lecturers can access this"})
+		return
+	}
 	var logs []models.ConsultationLog
 	
 	if err := koneksi.DB.Preload("FeedbackItems").Preload("Student").
 		Joins("JOIN students ON students.id = consultation_logs.student_id").
-		Where("students.lecturer_id = ?", lecturerID).
+		Where("students.lecturer_id = ?", currentUser.Lecturer.ID).
 		Find(&logs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 	c.JSON(http.StatusOK, logs)
@@ -219,11 +267,19 @@ func GetLecturerConsultations(c *gin.Context) {
 
 // GET /api/lecturer/:id/students
 func GetLecturerStudents(c *gin.Context) {
-	lecturerID := c.Param("id")
+	currentUser := middleware.CurrentUser(c)
+	if currentUser == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	if currentUser.Role != models.RoleLecturer || currentUser.Lecturer == nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only lecturers can access this"})
+		return
+	}
 	var students []models.Student
 
-	if err := koneksi.DB.Preload("User").Where("lecturer_id = ?", lecturerID).Find(&students).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+	if err := koneksi.DB.Preload("User").Where("lecturer_id = ?", currentUser.Lecturer.ID).Find(&students).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 	c.JSON(http.StatusOK, students)

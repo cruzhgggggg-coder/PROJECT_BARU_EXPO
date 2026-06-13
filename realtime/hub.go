@@ -3,6 +3,7 @@ package realtime
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,8 +44,18 @@ func NewHub() *Hub {
 	}
 }
 
+var allowedWSOrigins = map[string]bool{
+	"http://localhost:8081":  true,
+	"http://localhost:19006": true,
+	"http://localhost:5173":  true,
+	"http://localhost:3000":  true,
+}
+
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: func(r *http.Request) bool {
+		// Allow all origins since the WebSocket endpoint is protected by JWT token authentication
+		return true
+	},
 }
 
 func (h *Hub) HandleWebSocket(c *gin.Context) {
@@ -89,7 +100,7 @@ func (h *Hub) readLoop(client *Client) {
 
 		switch msg.Action {
 		case "subscribe":
-			if msg.Room != "" {
+			if msg.Room != "" && isValidRoom(msg.Room) {
 				h.subscribe(client, msg.Room)
 			}
 		case "unsubscribe":
@@ -98,6 +109,22 @@ func (h *Hub) readLoop(client *Client) {
 			}
 		}
 	}
+}
+
+func isValidRoom(room string) bool {
+	if !strings.HasPrefix(room, "consultation.") {
+		return false
+	}
+	idStr := strings.TrimPrefix(room, "consultation.")
+	if idStr == "" {
+		return false
+	}
+	for _, c := range idStr {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *Hub) pingLoop(client *Client) {

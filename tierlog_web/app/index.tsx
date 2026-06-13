@@ -1,3 +1,6 @@
+// U-1: This root index redirects authenticated users to /dashboard and shows a welcome screen for guests.
+// This overlaps with (tabs)/ routes which also handle authenticated navigation.
+// The welcome/landing page here is intentional for unauthenticated users; (tabs)/ handles post-login flows.
 import { Redirect, router } from "expo-router";
 import React from "react";
 import { Platform, Text, View } from "react-native";

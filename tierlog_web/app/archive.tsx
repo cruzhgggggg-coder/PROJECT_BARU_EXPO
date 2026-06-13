@@ -417,7 +417,7 @@ export default function ArchiveScreen() {
         showFloatingShapes={false}
         onRefresh={onRefresh}
         refreshing={refreshing}
-        scrollable={!isMobile}
+        scrollable={true}
         contentContainerStyle={{ paddingHorizontal: isMobile ? 12 : 24, paddingVertical: isMobile ? 16 : 32 }}
       >
         <NavBar />

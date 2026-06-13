@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type UserRole string
@@ -42,9 +44,13 @@ type User struct {
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 
+	// D-2: All foreign key relationships use constraint:OnDelete:CASCADE or RESTRICT
+	// to prevent orphan records at the database level
 	Student  *Student  `gorm:"foreignKey:UserID" json:"student,omitempty"`
 	Lecturer *Lecturer `gorm:"foreignKey:UserID" json:"lecturer,omitempty"`
 
+	// TODO: D-1 - Move API keys to separate `user_api_keys` table with row-level encryption
+	// Current implementation encrypts at application level via AES-GCM
 	OpenAIKey       string `gorm:"type:varchar(255)" json:"openai_key"`
 	GeminiKey       string `gorm:"type:varchar(255)" json:"gemini_key"`
 	AnthropicKey    string `gorm:"type:varchar(255)" json:"anthropic_key"`
@@ -108,9 +114,11 @@ type Student struct {
 
 type ConsultationLog struct {
 	ID                         uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
-	StudentID                  uint64         `gorm:"not null" json:"student_id"`
+	StudentID                  uint64         `gorm:"not null;index:idx_student_id" json:"student_id"`
 	AudioFilename              string         `gorm:"type:varchar(255)" json:"audio_filename"`
 	TranscriptFilename         string         `gorm:"type:varchar(255)" json:"transcript_filename"`
+	// D-7: Consider excluding TranscriptText from list queries using Omit()
+	// to reduce data transfer: koneksi.DB.Omit("Transcript_text").Find(&logs)
 	TranscriptText             string         `gorm:"type:longtext" json:"transcript_text"`
 	PaperFilename              string         `gorm:"type:varchar(255)" json:"paper_filename"`
 	FinalDocumentFilename      string         `gorm:"type:varchar(255)" json:"final_document_filename"`
@@ -119,6 +127,7 @@ type ConsultationLog struct {
 	RevisedDocumentUploadedAt  *time.Time     `json:"revised_document_uploaded_at"`
 	CreatedAt                  time.Time      `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt                  time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt                  gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 
 	Student            *Student               `gorm:"foreignKey:StudentID;constraint:OnDelete:CASCADE" json:"student,omitempty"`
 	FeedbackItems      []FeedbackItem         `gorm:"foreignKey:ConsultationLogID;constraint:OnDelete:CASCADE" json:"feedback_items"`
@@ -127,13 +136,14 @@ type ConsultationLog struct {
 
 type FeedbackItem struct {
 	ID                uint64           `gorm:"primaryKey;autoIncrement" json:"id"`
-	ConsultationLogID uint64           `gorm:"column:log_id;not null" json:"consultation_log_id"`
+	ConsultationLogID uint64           `gorm:"column:log_id;not null;index:idx_log_id" json:"consultation_log_id"`
 	Content           string           `gorm:"type:text;not null" json:"content"`
-	Category          FeedbackCategory `gorm:"type:enum('Minor','Major');not null" json:"category"`
-	Status            FeedbackStatus   `gorm:"type:enum('Fixed','Pending','Validated');not null;default:'Pending'" json:"status"`
+	Category          FeedbackCategory `gorm:"type:enum('Minor','Major');not null;index:idx_category" json:"category"`
+	Status            FeedbackStatus   `gorm:"type:enum('Fixed','Pending','Validated');not null;default:'Pending';index:idx_status" json:"status"`
 	FixProofText      string           `gorm:"type:text" json:"fix_proof_text"`
 	CreatedAt         time.Time        `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt         time.Time        `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt         gorm.DeletedAt   `gorm:"index" json:"deleted_at,omitempty"`
 
 	Comments []FeedbackComment `gorm:"foreignKey:FeedbackItemID;constraint:OnDelete:CASCADE" json:"comments,omitempty"`
 }
@@ -142,7 +152,7 @@ type FeedbackComment struct {
 	ID             uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	FeedbackItemID uint64    `gorm:"column:feedback_item_id;not null;index" json:"feedback_id"`
 	AuthorID       uint64    `gorm:"not null" json:"author_id"`
-	AuthorRole     string    `gorm:"type:varchar(20);not null" json:"author_role"` // "student" or "lecturer"
+	AuthorRole     string    `gorm:"type:enum('student','lecturer');not null" json:"author_role"`
 	Content        string    `gorm:"type:text;not null" json:"content"`
 	CreatedAt      time.Time `gorm:"autoCreateTime" json:"created_at"`
 }
@@ -162,7 +172,7 @@ type DirectMessage struct {
 	ID         uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	LogID      uint64    `gorm:"column:log_id;not null;index" json:"log_id"`
 	SenderID   uint64    `gorm:"not null" json:"sender_id"`
-	SenderRole string    `gorm:"type:varchar(20);not null" json:"sender_role"` // "student" or "lecturer"
+	SenderRole string    `gorm:"type:enum('student','lecturer');not null" json:"sender_role"`
 	Content    string    `gorm:"type:text;not null" json:"content"`
 	CreatedAt  time.Time `gorm:"autoCreateTime" json:"created_at"`
 }
@@ -170,7 +180,7 @@ type DirectMessage struct {
 type AIChatMessage struct {
 	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	LogID     uint64    `gorm:"column:log_id;not null;index" json:"log_id"`
-	Role      string    `gorm:"type:varchar(20);not null" json:"role"` // "user" or "ai"
+	Role      string    `gorm:"type:enum('user','ai');not null" json:"role"`
 	Content   string    `gorm:"type:text;not null" json:"content"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
 }

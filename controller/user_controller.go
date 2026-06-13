@@ -3,7 +3,9 @@ package controller
 import (
 	"net/http"
 
+	"testing_go/auth"
 	"testing_go/koneksi"
+	"testing_go/middleware"
 	"testing_go/models"
 
 	"github.com/gin-gonic/gin"
@@ -25,6 +27,15 @@ func CreateUser(c *gin.Context) {
 	if err := c.ShouldBindJSON(&user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	// Hash password before storing
+	if user.Password != "" {
+		hashed, err := auth.HashPassword(user.Password)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+			return
+		}
+		user.Password = hashed
 	}
 	if err := koneksi.DB.Create(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -82,8 +93,13 @@ func CreateStudent(c *gin.Context) {
 }
 // UpdateAIGatewaySettings updates the user's AI keys and preferred model
 func UpdateAIGatewaySettings(c *gin.Context) {
+	currentUser := middleware.CurrentUser(c)
+	if currentUser == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
 	var req struct {
-		UserID         uint64 `json:"user_id" binding:"required"`
 		OpenAIKey      string `json:"openai_key"`
 		GeminiKey      string `json:"gemini_key"`
 		AnthropicKey   string `json:"anthropic_key"`
@@ -96,19 +112,7 @@ func UpdateAIGatewaySettings(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	if err := koneksi.DB.First(&user, req.UserID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-		return
-	}
-
-	// Only update if gateway is active
-	/* 
-	if !user.IsGatewayActive {
-		c.JSON(http.StatusForbidden, gin.H{"error": "AI Gateway belum aktif. Gunakan kode redeem untuk mengaktifkan."})
-		return
-	}
-	*/
+	user := currentUser
 
 	user.OpenAIKey = req.OpenAIKey
 	user.GeminiKey = req.GeminiKey
@@ -117,10 +121,10 @@ func UpdateAIGatewaySettings(c *gin.Context) {
 	user.PreferredModel = req.PreferredModel
 
 	// Encrypt API keys before storing
-	encryptUserKeys(&user)
+	encryptUserKeys(user)
 
-	if err := koneksi.DB.Save(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save settings: " + err.Error()})
+	if err := koneksi.DB.Save(user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save settings"})
 		return
 	}
 
@@ -129,9 +133,14 @@ func UpdateAIGatewaySettings(c *gin.Context) {
 
 // RedeemGatewayCode activates AI Gateway for a user
 func RedeemGatewayCode(c *gin.Context) {
+	currentUser := middleware.CurrentUser(c)
+	if currentUser == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
 	var req struct {
-		UserID uint64 `json:"user_id" binding:"required"`
-		Code   string `json:"code" binding:"required"`
+		Code string `json:"code" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -145,11 +154,7 @@ func RedeemGatewayCode(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	if err := koneksi.DB.First(&user, req.UserID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-		return
-	}
+	user := currentUser
 
 	// Mark code as used
 	redeemCode.IsUsed = true
@@ -158,13 +163,23 @@ func RedeemGatewayCode(c *gin.Context) {
 
 	// Activate Gateway
 	user.IsGatewayActive = true
-	koneksi.DB.Save(&user)
+	koneksi.DB.Save(user)
 
-	c.JSON(http.StatusOK, gin.H{"message": "AI Gateway Activated Successfully! Enjoy your plug-and-play freedom."})
+	c.JSON(http.StatusOK, gin.H{"message": "AI Gateway Activated Successfully!"})
 }
 
 // GenerateRedeemCode creates a new redeem code (Admin/Dev tool)
 func GenerateRedeemCode(c *gin.Context) {
+	currentUser := middleware.CurrentUser(c)
+	if currentUser == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	if currentUser.Role != models.RoleLecturer {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only lecturers can generate redeem codes"})
+		return
+	}
+
 	var req struct {
 		Code string `json:"code" binding:"required"`
 	}

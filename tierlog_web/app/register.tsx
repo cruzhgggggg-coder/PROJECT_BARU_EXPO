@@ -63,9 +63,25 @@ export default function RegisterScreen() {
   const selectedLecturer = lecturers.find((lec) => String(lec.id) === form.lecturer_id);
   const selectedLecturerName = selectedLecturer ? selectedLecturer.name : "Select Advisor...";
 
+  // M-2: Frontend form validation before API submission
+  const validateEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const validatePassword = (password: string): string | null => {
+    if (password.length < 8) return "Password must be at least 8 characters";
+    return null;
+  };
+
   const handleRegister = async () => {
     if (!form.name || !form.email || !form.password) {
       setError("Name, Email, and Password are required.");
+      return;
+    }
+    if (!validateEmail(form.email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    const passwordError = validatePassword(form.password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     if (role === "student" && !form.lecturer_id) {

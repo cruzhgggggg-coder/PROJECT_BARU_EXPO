@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from "react";
+import React, { useEffect, useCallback, useState, useRef } from "react";
 import { Text, View, Pressable, Platform } from "react-native";
 import { router } from "expo-router";
 import { Cpu, CheckCircle, Clock, AlertCircle, User, Archive } from "lucide-react-native";
@@ -53,9 +53,14 @@ export default function DashboardScreen() {
     }
   }, [user?.role]);
 
+  const loadDataRef = useRef(loadData);
+  loadDataRef.current = loadData;
+
+  // F-7: Use stable ref to prevent dependency loop - loadData changes won't trigger re-fetch
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (booting || !accessToken) return;
+    loadDataRef.current();
+  }, [booting, accessToken, user?.role]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

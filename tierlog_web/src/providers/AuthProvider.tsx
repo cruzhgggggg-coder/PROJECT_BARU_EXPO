@@ -1,6 +1,15 @@
-// Polyfill atob for React Native
+// F-4: Polyfill atob for React Native with input validation
 if (typeof atob === "undefined") {
   (globalThis as any).atob = (input: string) => {
+    if (typeof input !== "string") {
+      throw new TypeError("atob: input must be a string");
+    }
+    // Remove any whitespace
+    input = input.replace(/\s/g, "");
+    // Validate base64 characters
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(input)) {
+      throw new Error("atob: invalid base64 string");
+    }
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
     let str = input.replace(/=+$/, "");
     let output = "";

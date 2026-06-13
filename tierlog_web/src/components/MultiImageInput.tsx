@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Camera, FileText } from "lucide-react-native";
 import { cn } from "@/src/lib/utils";
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -115,13 +116,13 @@ function MultiImageInputNative({
             borderColor: "rgba(167, 139, 250, 0.22)",
             justifyContent: "center" as const,
             alignItems: "center" as const,
-            gap: 6,
+            gap: 8,
             padding: 12,
             backgroundColor: "rgba(255,255,255,0.03)",
             transform: [{ scale: pressed ? 0.98 : 1 }],
           })}
         >
-          <Text style={{ color: "#a78bfa", fontSize: 24 }}>📸</Text>
+          <Camera color="#a78bfa" size={24} />
           <Text style={{ color: "#94a3b8", fontSize: 11, fontWeight: "600", textAlign: "center" as const }}>Add Photos</Text>
         </Pressable>
 
@@ -136,13 +137,13 @@ function MultiImageInputNative({
             borderColor: "rgba(96, 165, 250, 0.22)",
             justifyContent: "center" as const,
             alignItems: "center" as const,
-            gap: 6,
+            gap: 8,
             padding: 12,
             backgroundColor: "rgba(255,255,255,0.03)",
             transform: [{ scale: pressed ? 0.98 : 1 }],
           })}
         >
-          <Text style={{ color: "#60a5fa", fontSize: 24 }}>📄</Text>
+          <FileText color="#60a5fa" size={24} />
           <Text style={{ color: "#94a3b8", fontSize: 11, fontWeight: "600", textAlign: "center" as const }}>Add DOCX</Text>
         </Pressable>
       </View>
@@ -168,11 +169,17 @@ function MultiImageInputNative({
                 overflow: "hidden",
               }}
             >
-              <View style={{ width: 48, height: 48, backgroundColor: "rgba(96, 165, 250, 0.08)", borderRadius: 8, justifyContent: "center" as const, alignItems: "center" as const }}>
-                <Text style={{ color: "#60a5fa", fontSize: 18 }}>
-                  {f.type?.startsWith("image/") ? "📸" : "📄"}
-                </Text>
-              </View>
+              {f.type?.startsWith("image/") ? (
+                <Image
+                  source={{ uri: f.uri }}
+                  style={{ width: 48, height: 48, borderRadius: 8 }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={{ width: 48, height: 48, backgroundColor: "rgba(96, 165, 250, 0.08)", borderRadius: 8, justifyContent: "center" as const, alignItems: "center" as const }}>
+                  <FileText color="#60a5fa" size={20} />
+                </View>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={{ color: "#e2e8f0", fontSize: 12, fontWeight: "600" }} numberOfLines={1}>{f.name}</Text>
                 <Text style={{ color: "#64748b", fontSize: 10, marginTop: 2 }}>

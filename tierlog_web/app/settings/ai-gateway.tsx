@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { Cpu, CheckCircle, AlertCircle, Clock, Key, Radio, Settings, Zap, ChevronDown, ChevronRight } from "lucide-react-native";
 
@@ -79,6 +79,8 @@ const PROVIDER_ORDER = ["openai", "gemini", "anthropic", "nvidia", "groq"];
 export default function AIGatewayScreen() {
   const isMobile = useIsMobile();
   const { api, user, setUser } = useAuth();
+  // F-2: API keys arrive masked from backend (••••••••••••••••).
+  // Only update when user explicitly pastes a new key.
   const [openaiKey, setOpenaiKey] = useState(user?.openai_key ?? "");
   const [geminiKey, setGeminiKey] = useState(user?.gemini_key ?? "");
   const [anthropicKey, setAnthropicKey] = useState(user?.anthropic_key ?? "");
@@ -223,13 +225,22 @@ export default function AIGatewayScreen() {
     }
   };
 
+  // F-8: Debounce auto-save to prevent excessive API calls during rapid input
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handlePaste = (provider: string, pastedValue: string) => {
     setActiveAutoSaveProvider(provider);
     const setter = getKeySetter(provider);
     setter(pastedValue);
-    const key = `${provider}_key` as keyof User;
-    const updates: Partial<User> = { [key]: pastedValue };
-    void save(updates);
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      const key = `${provider}_key` as keyof User;
+      const updates: Partial<User> = { [key]: pastedValue };
+      void save(updates);
+    }, 500);
   };
 
   const selectModel = (modelValue: string) => {

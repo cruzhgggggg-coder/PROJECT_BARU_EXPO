@@ -22,6 +22,15 @@ import (
 	"google.golang.org/genai"
 )
 
+// debugMode controls verbose logging output. Set GIN_MODE=release to suppress.
+var debugMode = os.Getenv("GIN_MODE") != "release"
+
+func debugLog(format string, args ...interface{}) {
+	if debugMode {
+		fmt.Printf(format, args...)
+	}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  PROMPT CONSTANTS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -127,7 +136,7 @@ func transcribeAudio(audioPath string, userGroqKey ...string) (string, error) {
 		apiKey = os.Getenv("GROQ_API_KEY")
 	}
 	if apiKey == "" {
-		fmt.Println("\033[31m[GROQ STT] Warning: GROQ_API_KEY is not set in .env. Audio transcription is disabled.\033[0m")
+		fmt.Println("[GROQ STT] Warning: GROQ_API_KEY is not set in .env. Audio transcription is disabled.")
 		return "Transkripsi dinonaktifkan: GROQ_API_KEY belum dikonfigurasi oleh administrator server.", nil
 	}
 
@@ -139,18 +148,18 @@ func transcribeAudio(audioPath string, userGroqKey ...string) (string, error) {
 	ext := filepath.Ext(audioPath)
 	totalSize := int64(len(audioData))
 
-	fmt.Printf("\033[36m[GROQ STT] File: %s | Size: %.2f MB\033[0m\n",
+	debugLog("\033[36m[GROQ STT] File: %s | Size: %.2f MB\033[0m\n",
 		filepath.Base(audioPath), float64(totalSize)/(1024*1024))
 
 	// ── Fast path: file fits in a single request ─────────────────────────────
 	if totalSize <= maxChunkBytes {
-		fmt.Printf("\033[36m[GROQ STT] Single-chunk mode — sending directly to Whisper...\033[0m\n")
+		debugLog("\033[36m[GROQ STT] Single-chunk mode — sending directly to Whisper...\033[0m\n")
 		return transcribeChunk(apiKey, audioData, filepath.Base(audioPath))
 	}
 
 	// ── Chunked path: split file into ≤20 MB byte slices ────────────────────
 	totalChunks := int((totalSize + maxChunkBytes - 1) / maxChunkBytes) // ceiling division
-	fmt.Printf("\033[33m[GROQ STT] File exceeds 20 MB — splitting into %d chunks...\033[0m\n", totalChunks)
+	debugLog("\033[33m[GROQ STT] File exceeds 20 MB — splitting into %d chunks...\033[0m\n", totalChunks)
 
 	var transcripts []string
 	var offset int64
@@ -167,7 +176,7 @@ func transcribeAudio(audioPath string, userGroqKey ...string) (string, error) {
 		chunkSizeMB := float64(len(chunk)) / (1024 * 1024)
 		chunkFilename := fmt.Sprintf("chunk_%d_of_%d%s", chunkNum, totalChunks, ext)
 
-		fmt.Printf("\033[36m[GROQ STT] Chunk %d/%d (%.2f MB) — transcribing...\033[0m\n",
+		debugLog("\033[36m[GROQ STT] Chunk %d/%d (%.2f MB) — transcribing...\033[0m\n",
 			chunkNum, totalChunks, chunkSizeMB)
 
 		text, err := transcribeChunk(apiKey, chunk, chunkFilename)
@@ -179,14 +188,14 @@ func transcribeAudio(audioPath string, userGroqKey ...string) (string, error) {
 		if trimmed != "" {
 			transcripts = append(transcripts, trimmed)
 		}
-		fmt.Printf("\033[32m[GROQ STT] Chunk %d/%d done — %d chars transcribed\033[0m\n",
+		debugLog("\033[32m[GROQ STT] Chunk %d/%d done — %d chars transcribed\033[0m\n",
 			chunkNum, totalChunks, len(trimmed))
 
 		offset = end
 	}
 
 	fullTranscript := strings.Join(transcripts, " ")
-	fmt.Printf("\033[32m[GROQ STT] All %d chunks done — total transcript: %d chars\033[0m\n",
+	debugLog("\033[32m[GROQ STT] All %d chunks done — total transcript: %d chars\033[0m\n",
 		totalChunks, len(fullTranscript))
 
 	return fullTranscript, nil
@@ -229,7 +238,7 @@ func callNVIDIA(apiKey, model, systemPrompt, userPrompt string, isJSON bool) (st
 		model = "meta/llama-3.1-70b-instruct"
 	}
 
-	fmt.Printf("\033[34m[NVIDIA NIM] Initiating request (Model: %s)...\033[0m\n", model)
+	debugLog("\033[34m[NVIDIA NIM] Initiating request (Model: %s)...\033[0m\n", model)
 
 	url := "https://integrate.api.nvidia.com/v1/chat/completions"
 	
@@ -255,24 +264,24 @@ func callNVIDIA(apiKey, model, systemPrompt, userPrompt string, isJSON bool) (st
 	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("\033[31m[NVIDIA NIM] Request Failed: %v\033[0m\n", err)
+		debugLog("[NVIDIA NIM] Request Failed: %v\n", err)
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	fmt.Printf("\033[32m[NVIDIA NIM] Response Received! Status: %d, Size: %d bytes\033[0m\n", resp.StatusCode, len(body))
+	debugLog("[NVIDIA NIM] Response Received! Status: %d, Size: %d bytes\n", resp.StatusCode, len(body))
 
 	if resp.StatusCode != http.StatusOK {
 		// Auto-fallback: if model is deprecated/missing (404/400) and we're not already on the fallback model
 		if (resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusBadRequest) && model != "meta/llama-3.1-70b-instruct" {
-			fmt.Printf("\033[33m[NVIDIA NIM] Model '%s' failed with status %d. Retrying with fallback model 'meta/llama-3.1-70b-instruct'...\033[0m\n", model, resp.StatusCode)
+			debugLog("[NVIDIA NIM] Model '%s' failed with status %d. Retrying with fallback model 'meta/llama-3.1-70b-instruct'...\n", model, resp.StatusCode)
 			return callNVIDIA(apiKey, "meta/llama-3.1-70b-instruct", systemPrompt, userPrompt, isJSON)
 		}
 
 		// Fallback for models that do not support json_object format (e.g. Bytedance Seed OSS)
 		if isJSON && reqBody.ResponseFormat != nil {
-			fmt.Printf("\033[33m[NVIDIA NIM] Retrying without JSON response_format...\033[0m\n")
+			debugLog("[NVIDIA NIM] Retrying without JSON response_format...\n")
 			reqBody.ResponseFormat = nil
 			retryJsonData, _ := json.Marshal(reqBody)
 			retryReq, _ := http.NewRequest("POST", url, bytes.NewBuffer(retryJsonData))
@@ -321,7 +330,7 @@ func callAnthropic(apiKey, model, systemPrompt, userPrompt string) (string, erro
 		model = "claude-3-5-sonnet-20240620"
 	}
 
-	fmt.Printf("\033[36m[ANTHROPIC AI] Initiating request (Model: %s)...\033[0m\n", model)
+	debugLog("\033[36m[ANTHROPIC AI] Initiating request (Model: %s)...\033[0m\n", model)
 
 	url := "https://api.anthropic.com/v1/messages"
 	
@@ -487,14 +496,14 @@ func callGemini(apiKey, model, systemPrompt, userPrompt string, isJSON bool) (st
 		model = "gemini-2.0-flash"
 	}
 
-	fmt.Printf("\033[35m[GEMINI AI] Initiating request (Model: %s)...\033[0m\n", model)
+	debugLog("\033[35m[GEMINI AI] Initiating request (Model: %s)...\033[0m\n", model)
 
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey: apiKey,
 	})
 	if err != nil {
-		fmt.Printf("\033[31m[GEMINI AI] Failed to create client: %v\033[0m\n", err)
+		debugLog("[GEMINI AI] Failed to create client: %v\n", err)
 		return "", fmt.Errorf("failed to create Gemini client: %v", err)
 	}
 
@@ -519,7 +528,7 @@ func callGemini(apiKey, model, systemPrompt, userPrompt string, isJSON bool) (st
 			resp, err = client.Models.GenerateContent(ctx, model, []*genai.Content{content}, config)
 		}
 		if err != nil {
-			fmt.Printf("\033[31m[GEMINI AI] Request Failed: %v\033[0m\n", err)
+			debugLog("[GEMINI AI] Request Failed: %v\n", err)
 			return "", fmt.Errorf("Gemini API error: %v", err)
 		}
 	}
@@ -591,7 +600,7 @@ func callNVIDIAVision(apiKey, model, systemPrompt, userPrompt, imagePath string)
 	b64Data := base64.StdEncoding.EncodeToString(imgData)
 	dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, b64Data)
 
-	fmt.Printf("\033[34m[NVIDIA VISION] Model: %s | Image: %s (%.2f KB)\033[0m\n",
+	debugLog("\033[34m[NVIDIA VISION] Model: %s | Image: %s (%.2f KB)\033[0m\n",
 		model, filepath.Base(imagePath), float64(len(imgData))/1024)
 
 	reqBody := map[string]interface{}{
@@ -636,7 +645,7 @@ func callNVIDIAVision(apiKey, model, systemPrompt, userPrompt, imagePath string)
 		return "", errors.New("NVIDIA Vision returned no choices")
 	}
 
-	fmt.Printf("\033[32m[NVIDIA VISION] Response received — %d chars\033[0m\n", len(nvidiaResp.Choices[0].Message.Content))
+	debugLog("[NVIDIA VISION] Response received — %d chars\n", len(nvidiaResp.Choices[0].Message.Content))
 	return nvidiaResp.Choices[0].Message.Content, nil
 }
 
@@ -657,7 +666,7 @@ func callOpenAIVision(apiKey, model, systemPrompt, userPrompt, imagePath string)
 	b64Data := base64.StdEncoding.EncodeToString(imgData)
 	dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, b64Data)
 
-	fmt.Printf("\033[36m[OPENAI VISION] Model: %s | Image: %s (%.2f KB)\033[0m\n",
+	debugLog("\033[36m[OPENAI VISION] Model: %s | Image: %s (%.2f KB)\033[0m\n",
 		model, filepath.Base(imagePath), float64(len(imgData))/1024)
 
 	reqBody := map[string]interface{}{
@@ -702,7 +711,7 @@ func callOpenAIVision(apiKey, model, systemPrompt, userPrompt, imagePath string)
 		return "", errors.New("OpenAI Vision returned no choices")
 	}
 
-	fmt.Printf("\033[32m[OPENAI VISION] Response received — %d chars\033[0m\n", len(openaiResp.Choices[0].Message.Content))
+	debugLog("[OPENAI VISION] Response received — %d chars\n", len(openaiResp.Choices[0].Message.Content))
 	return openaiResp.Choices[0].Message.Content, nil
 }
 
@@ -724,7 +733,7 @@ func callGeminiVision(apiKey, model, systemPrompt, userPrompt, imagePath string)
 	}
 	mimeType := detectMIMEType(imagePath)
 
-	fmt.Printf("\033[35m[GEMINI VISION] Model: %s | Image: %s (%.2f KB)\033[0m\n",
+	debugLog("\033[35m[GEMINI VISION] Model: %s | Image: %s (%.2f KB)\033[0m\n",
 		model, filepath.Base(imagePath), float64(len(imgData))/1024)
 
 	ctx := context.Background()
@@ -749,7 +758,7 @@ func callGeminiVision(apiKey, model, systemPrompt, userPrompt, imagePath string)
 	}
 
 	result := resp.Candidates[0].Content.Parts[0].Text
-	fmt.Printf("\033[32m[GEMINI VISION] Response received — %d chars\033[0m\n", len(result))
+	debugLog("[GEMINI VISION] Response received — %d chars\n", len(result))
 	return result, nil
 }
 
@@ -769,7 +778,7 @@ func callAnthropicVision(apiKey, model, systemPrompt, userPrompt, imagePath stri
 	mimeType := detectMIMEType(imagePath)
 	b64Data := base64.StdEncoding.EncodeToString(imgData)
 
-	fmt.Printf("\033[36m[ANTHROPIC VISION] Model: %s | Image: %s (%.2f KB)\033[0m\n",
+	debugLog("\033[36m[ANTHROPIC VISION] Model: %s | Image: %s (%.2f KB)\033[0m\n",
 		model, filepath.Base(imagePath), float64(len(imgData))/1024)
 
 	reqBody := map[string]interface{}{
@@ -824,7 +833,7 @@ func callAnthropicVision(apiKey, model, systemPrompt, userPrompt, imagePath stri
 		return "", errors.New("Anthropic Vision returned no content")
 	}
 
-	fmt.Printf("\033[32m[ANTHROPIC VISION] Response received — %d chars\033[0m\n", len(result.Content[0].Text))
+	debugLog("[ANTHROPIC VISION] Response received — %d chars\n", len(result.Content[0].Text))
 	return result.Content[0].Text, nil
 }
 
@@ -1033,7 +1042,11 @@ func AIAssistHandler(c *gin.Context) {
 
 func GetAIModels(c *gin.Context) {
 	provider := c.Query("provider")
-	apiKey := c.Query("api_key")
+	// S-11: Read API key from header instead of query parameter
+	apiKey := c.GetHeader("X-API-Key")
+	if apiKey == "" {
+		apiKey = c.Query("api_key") // Fallback for backward compatibility
+	}
 
 	if provider != "nvidia" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Only nvidia provider supports dynamic models currently"})
@@ -1041,7 +1054,7 @@ func GetAIModels(c *gin.Context) {
 	}
 
 	if apiKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "api_key is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "API key is required (set via X-API-Key header)"})
 		return
 	}
 

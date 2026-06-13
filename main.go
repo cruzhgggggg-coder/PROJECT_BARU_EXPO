@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"testing_go/controller"
 	"testing_go/koneksi"
@@ -48,8 +50,10 @@ func corsMiddleware() gin.HandlerFunc {
 		allowed := allowedOrigins[origin]
 		if !allowed {
 			// Check for configured tunnel origin
-			if tunnelOrigin := os.Getenv("NGROK_ORIGIN"); tunnelOrigin != "" && origin == tunnelOrigin {
-				allowed = true
+			if tunnelOrigin := os.Getenv("NGROK_ORIGIN"); tunnelOrigin != "" {
+				if strings.HasPrefix(tunnelOrigin, "https://") && origin == tunnelOrigin {
+					allowed = true
+				}
 			}
 		}
 		if allowed {
@@ -79,18 +83,32 @@ func main() {
 
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
+	r.MaxMultipartMemory = 20 << 20 // 20 MB max multipart memory
+	r.Use(func(c *gin.Context) {
+		if c.Request.ContentLength > 32*1024*1024 {
+			c.AbortWithStatusJSON(413, gin.H{"error": "Request body too large"})
+			return
+		}
+		c.Next()
+	})
 	r.Use(corsMiddleware())
+
+	// Rate limiter for auth endpoints: 20 requests per minute per IP
+	authLimiter := middleware.NewRateLimiter(20, time.Minute)
 
 	hub := realtime.NewHub()
 	controller.SetRealtimeHub(hub)
 
-	r.Static("/storage", "./storage")
+	// Protected static file serving - requires authentication
+	storageGroup := r.Group("/storage")
+	storageGroup.Use(middleware.AuthRequired())
+	storageGroup.Static("", "./storage")
 
 	r.GET("/ws", hub.HandleWebSocket)
 
-	r.POST("/auth/register", controller.Register)
-	r.POST("/auth/login", controller.Login)
-	r.POST("/auth/refresh", controller.Refresh)
+	r.POST("/auth/register", middleware.RateLimit(authLimiter), controller.Register)
+	r.POST("/auth/login", middleware.RateLimit(authLimiter), controller.Login)
+	r.POST("/auth/refresh", middleware.RateLimit(authLimiter), controller.Refresh)
 	r.POST("/auth/logout", controller.Logout)
 	r.GET("/auth/lecturers", controller.GetLecturers)
 

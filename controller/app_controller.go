@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -28,22 +29,70 @@ func SetRealtimeHub(hub *realtime.Hub) {
 	WebSocketHub = hub
 }
 
+// validateUploadedFile checks file extension whitelist and max size
+func validateUploadedFile(file *multipart.FileHeader, allowedExts []string, maxSize int64) error {
+	if file.Size > maxSize {
+		return fmt.Errorf("file size exceeds maximum allowed (%d MB)", maxSize/(1024*1024))
+	}
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	for _, allowed := range allowedExts {
+		if ext == allowed {
+			return nil
+		}
+	}
+	return fmt.Errorf("file type '%s' is not allowed", ext)
+}
+
 // encryptUserKeys encrypts all API key fields before database storage.
 func encryptUserKeys(user *models.User) {
-	user.OpenAIKey, _ = auth.EncryptAES(user.OpenAIKey)
-	user.GeminiKey, _ = auth.EncryptAES(user.GeminiKey)
-	user.AnthropicKey, _ = auth.EncryptAES(user.AnthropicKey)
-	user.NvidiaKey, _ = auth.EncryptAES(user.NvidiaKey)
-	user.GroqKey, _ = auth.EncryptAES(user.GroqKey)
+	keys := []struct {
+		name string
+		val  string
+		ptr  *string
+	}{
+		{"OpenAIKey", user.OpenAIKey, &user.OpenAIKey},
+		{"GeminiKey", user.GeminiKey, &user.GeminiKey},
+		{"AnthropicKey", user.AnthropicKey, &user.AnthropicKey},
+		{"NvidiaKey", user.NvidiaKey, &user.NvidiaKey},
+		{"GroqKey", user.GroqKey, &user.GroqKey},
+	}
+	for _, k := range keys {
+		if k.val == "" {
+			continue
+		}
+		encrypted, err := auth.EncryptAES(k.val)
+		if err != nil {
+			fmt.Printf("[ENCRYPT] Warning: failed to encrypt %s: %v\n", k.name, err)
+			continue
+		}
+		*k.ptr = encrypted
+	}
 }
 
 // decryptUserKeys decrypts all API key fields after database read.
 func decryptUserKeys(user *models.User) {
-	user.OpenAIKey, _ = auth.DecryptAES(user.OpenAIKey)
-	user.GeminiKey, _ = auth.DecryptAES(user.GeminiKey)
-	user.AnthropicKey, _ = auth.DecryptAES(user.AnthropicKey)
-	user.NvidiaKey, _ = auth.DecryptAES(user.NvidiaKey)
-	user.GroqKey, _ = auth.DecryptAES(user.GroqKey)
+	keys := []struct {
+		name string
+		val  string
+		ptr  *string
+	}{
+		{"OpenAIKey", user.OpenAIKey, &user.OpenAIKey},
+		{"GeminiKey", user.GeminiKey, &user.GeminiKey},
+		{"AnthropicKey", user.AnthropicKey, &user.AnthropicKey},
+		{"NvidiaKey", user.NvidiaKey, &user.NvidiaKey},
+		{"GroqKey", user.GroqKey, &user.GroqKey},
+	}
+	for _, k := range keys {
+		if k.val == "" {
+			continue
+		}
+		decrypted, err := auth.DecryptAES(k.val)
+		if err != nil {
+			fmt.Printf("[DECRYPT] Warning: failed to decrypt %s: %v\n", k.name, err)
+			continue
+		}
+		*k.ptr = decrypted
+	}
 }
 
 func maskKey(key string) string {
@@ -489,33 +538,56 @@ func queryScopeForUser(query *gorm.DB, user *models.User) *gorm.DB {
 func DashboardStatsV2(c *gin.Context) {
 	user := middleware.CurrentUser(c)
 
-	var totalLogs int64
-	var totalFeedback int64
-	var majorFeedback int64
-	var pendingFeedback int64
-	var quests []models.FeedbackItem
+	type statsResult struct {
+		TotalLogs       int64
+		TotalFeedback   int64
+		MajorFeedback   int64
+		PendingFeedback int64
+	}
+
+	var result statsResult
 
 	logQuery := queryScopeForUser(koneksi.DB.Model(&models.ConsultationLog{}), user)
-	feedbackQuery := queryScopeForUser(koneksi.DB.Model(&models.FeedbackItem{}).Joins("JOIN consultation_logs ON consultation_logs.id = feedback_items.log_id"), user)
+	logQuery.Count(&result.TotalLogs)
 
-	logQuery.Count(&totalLogs)
-	feedbackQuery.Count(&totalFeedback)
-	feedbackQuery.Session(&gorm.Session{}).Where("feedback_items.category = ?", models.CategoryMajor).Count(&majorFeedback)
-	feedbackQuery.Session(&gorm.Session{}).Where("feedback_items.status = ?", models.StatusPending).Count(&pendingFeedback)
-	feedbackQuery.Session(&gorm.Session{}).Where("feedback_items.status != ?", models.StatusValidated).Order("feedback_items.created_at desc").Limit(5).Find(&quests)
+	feedbackBase := queryScopeForUser(
+		koneksi.DB.Model(&models.FeedbackItem{}).Joins("JOIN consultation_logs ON consultation_logs.id = feedback_items.log_id"),
+		user,
+	)
+	feedbackBase.Count(&result.TotalFeedback)
+
+	if result.TotalFeedback > 0 {
+		koneksi.DB.Model(&models.FeedbackItem{}).
+			Joins("JOIN consultation_logs ON consultation_logs.id = feedback_items.log_id").
+			Scopes(func(db *gorm.DB) *gorm.DB { return queryScopeForUser(db, user) }).
+			Where("feedback_items.category = ?", models.CategoryMajor).
+			Count(&result.MajorFeedback)
+
+		koneksi.DB.Model(&models.FeedbackItem{}).
+			Joins("JOIN consultation_logs ON consultation_logs.id = feedback_items.log_id").
+			Scopes(func(db *gorm.DB) *gorm.DB { return queryScopeForUser(db, user) }).
+			Where("feedback_items.status = ?", models.StatusPending).
+			Count(&result.PendingFeedback)
+	}
+
+	var quests []models.FeedbackItem
+	queryScopeForUser(
+		koneksi.DB.Model(&models.FeedbackItem{}).Joins("JOIN consultation_logs ON consultation_logs.id = feedback_items.log_id"),
+		user,
+	).Where("feedback_items.status != ?", models.StatusValidated).Order("feedback_items.created_at desc").Limit(5).Find(&quests)
 
 	completionRate := 0
-	if totalFeedback > 0 {
-		completionRate = int(((totalFeedback - pendingFeedback) * 100) / totalFeedback)
+	if result.TotalFeedback > 0 {
+		completionRate = int(((result.TotalFeedback - result.PendingFeedback) * 100) / result.TotalFeedback)
 	}
 
 	response := gin.H{
-		"total_consultations": totalLogs,
-		"total_feedback":      totalFeedback,
-		"pending_feedback":    pendingFeedback,
-		"major_feedback":      majorFeedback,
+		"total_consultations": result.TotalLogs,
+		"total_feedback":      result.TotalFeedback,
+		"pending_feedback":    result.PendingFeedback,
+		"major_feedback":      result.MajorFeedback,
 		"completion_rate":     completionRate,
-		"draft_count":         totalLogs,
+		"draft_count":         result.TotalLogs,
 		"upcoming_quests":     quests,
 	}
 
@@ -529,7 +601,7 @@ func DashboardStatsV2(c *gin.Context) {
 		var studentCount int64
 		koneksi.DB.Model(&models.Student{}).Where("lecturer_id = ?", user.Lecturer.ID).Count(&studentCount)
 		response["student_count"] = studentCount
-		response["validation_queue"] = pendingFeedback
+		response["validation_queue"] = result.PendingFeedback
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -537,7 +609,50 @@ func DashboardStatsV2(c *gin.Context) {
 
 func accessibleLog(user *models.User, logID uint64) (*models.ConsultationLog, error) {
 	var log models.ConsultationLog
-	query := koneksi.DB.Preload("FeedbackItems").Preload("FeedbackItems.Comments").Preload("Student").Preload("Student.User").Preload("Student.Lecturer")
+	query := koneksi.DB
+
+	switch user.Role {
+	case models.RoleStudent:
+		query = query.Joins("JOIN students ON students.id = consultation_logs.student_id").Where("consultation_logs.id = ? AND students.user_id = ?", logID, user.ID)
+	case models.RoleLecturer:
+		query = query.Joins("JOIN students ON students.id = consultation_logs.student_id").Where("consultation_logs.id = ? AND students.lecturer_id = ?", logID, user.Lecturer.ID)
+	default:
+		return nil, errors.New("unsupported role")
+	}
+
+	if err := query.First(&log).Error; err != nil {
+		return nil, err
+	}
+
+	koneksi.DB.Where("log_id = ?", log.ID).Find(&log.FeedbackItems)
+	if len(log.FeedbackItems) > 0 {
+		ids := make([]uint64, len(log.FeedbackItems))
+		for i, fi := range log.FeedbackItems {
+			ids[i] = fi.ID
+		}
+		var comments []models.FeedbackComment
+		koneksi.DB.Where("feedback_item_id IN ?", ids).Find(&comments)
+		commentMap := make(map[uint64][]models.FeedbackComment)
+		for _, c := range comments {
+			commentMap[c.FeedbackItemID] = append(commentMap[c.FeedbackItemID], c)
+		}
+		for i := range log.FeedbackItems {
+			log.FeedbackItems[i].Comments = commentMap[log.FeedbackItems[i].ID]
+		}
+	}
+	koneksi.DB.Where("user_id = ?", log.StudentID).First(&log.Student)
+	if log.Student != nil {
+		koneksi.DB.Where("id = ?", log.Student.UserID).First(&log.Student.User)
+		koneksi.DB.Where("id = ?", log.Student.LecturerID).First(&log.Student.Lecturer)
+	}
+
+	return &log, nil
+}
+
+// accessibleLogLight returns only the log metadata without heavy preloads
+func accessibleLogLight(user *models.User, logID uint64) (*models.ConsultationLog, error) {
+	var log models.ConsultationLog
+	query := koneksi.DB
 
 	switch user.Role {
 	case models.RoleStudent:
@@ -558,6 +673,16 @@ func ConsultationListV2(c *gin.Context) {
 	user := middleware.CurrentUser(c)
 	var logs []models.ConsultationLog
 
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
 	query := queryScopeForUser(
 		koneksi.DB.
 			Preload("FeedbackItems").
@@ -568,12 +693,22 @@ func ConsultationListV2(c *gin.Context) {
 			Preload("Student.Lecturer"),
 		user,
 	)
-	if err := query.Order("consultation_logs.created_at desc").Find(&logs).Error; err != nil {
+
+	var total int64
+	query.Model(&models.ConsultationLog{}).Count(&total)
+
+	if err := query.Order("consultation_logs.created_at desc").Offset(offset).Limit(limit).Find(&logs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": logs})
+	c.JSON(http.StatusOK, gin.H{
+		"data":        logs,
+		"page":        page,
+		"limit":       limit,
+		"total":       total,
+		"total_pages": (total + int64(limit) - 1) / int64(limit),
+	})
 }
 
 func ArchiveListV2(c *gin.Context) {
@@ -599,9 +734,21 @@ func CreateConsultationV2(c *gin.Context) {
 		return
 	}
 
+	// Validate audio file
+	if err := validateUploadedFile(audioFile, []string{".mp3", ".wav", ".m4a", ".ogg", ".webm"}, 100*1024*1024); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Audio file invalid: %v", err)})
+		return
+	}
+
 	paperFile, err := c.FormFile("paper")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Paper file (.docx) is required"})
+		return
+	}
+
+	// Validate paper file
+	if err := validateUploadedFile(paperFile, []string{".docx"}, 50*1024*1024); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Paper file invalid: %v", err)})
 		return
 	}
 
@@ -641,7 +788,9 @@ func CreateConsultationV2(c *gin.Context) {
 	extractedTexts := make(map[string]string) // cache extracted text to avoid double API calls
 	if form, formErr := c.MultipartForm(); formErr == nil && len(form.File["annotations"]) > 0 {
 		annotationFiles := form.File["annotations"]
-		fmt.Printf("\033[36m[ANNOTATION] Found %d annotation file(s) — saving & extracting...\033[0m\n", len(annotationFiles))
+		if os.Getenv("GIN_MODE") != "release" {
+			fmt.Printf("[ANNOTATION] Found %d annotation file(s) — saving & extracting...\n", len(annotationFiles))
+		}
 		imageExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true}
 		var summaryParts []string
 		for i, fh := range annotationFiles {
@@ -763,7 +912,6 @@ func ConsultationChatV2(c *gin.Context) {
 		})
 	}
 
-	_ = log
 	response, err := GenerateRevisionAssistance(req.LogID, req.Query, req.Model)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "GUARDED:") {
@@ -805,7 +953,7 @@ func GetAIChats(c *gin.Context) {
 		return
 	}
 
-	log, err := accessibleLog(user, logID)
+	log, err := accessibleLogLight(user, logID)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
@@ -1163,7 +1311,7 @@ func GetDirectMessages(c *gin.Context) {
 	}
 
 	// Verify accessibility (log belongs to student or supervisor)
-	log, err := accessibleLog(user, logID)
+	log, err := accessibleLogLight(user, logID)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
@@ -1189,7 +1337,7 @@ func SendDirectMessage(c *gin.Context) {
 	}
 
 	// Verify accessibility
-	log, err := accessibleLog(user, logID)
+	log, err := accessibleLogLight(user, logID)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
@@ -1335,11 +1483,15 @@ Return ONLY valid JSON in this exact shape — no explanation, no markdown, no e
 	}
 
 	// Print raw response in terminal for debugging
-	fmt.Printf("\033[33m[AI CLASSIFICATION RAW RESPONSE]:\033[0m\n%s\n\033[0m", aiResponse)
+	if os.Getenv("GIN_MODE") != "release" {
+		fmt.Printf("[AI CLASSIFICATION] Raw response received (%d chars)\n", len(aiResponse))
+	}
 
 	// Strip markdown fences and find JSON boundaries
 	cleanedResponse := extractJSONBounds(aiResponse)
-	fmt.Printf("\033[36m[AI CLASSIFICATION CLEANED]:\033[0m\n%s\n\033[0m", cleanedResponse)
+	if os.Getenv("GIN_MODE") != "release" {
+		fmt.Printf("[AI CLASSIFICATION] Cleaned response: %d chars\n", len(cleanedResponse))
+	}
 
 	type ClassificationItem struct {
 		ID       uint64 `json:"id"`
@@ -1419,7 +1571,9 @@ Return ONLY valid JSON in this exact shape — no explanation, no markdown, no e
 			}
 		}
 		if len(finalClassifications) > 0 {
-			fmt.Printf("\033[33m[AI CLASSIFICATION] Used regex fallback — %d items recovered\033[0m\n", len(finalClassifications))
+			if os.Getenv("GIN_MODE") != "release" {
+				fmt.Printf("[AI CLASSIFICATION] Used regex fallback — %d items recovered\n", len(finalClassifications))
+			}
 			goto SAVE_TO_DB
 		}
 	}

@@ -3,6 +3,27 @@ import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { CloudUpload, CheckCircle } from "lucide-react-native";
 import { cn } from "@/src/lib/utils";
 
+const mapExtensionsToMimeTypes = (acceptString: string): string[] => {
+  const mimeMap: { [key: string]: string } = {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    "audio/*": "audio/*",
+    "image/*": "image/*",
+  };
+
+  return acceptString
+    .split(",")
+    .map((ext) => ext.trim())
+    .map((ext) => mimeMap[ext.toLowerCase()] || ext);
+};
+
 // ─── Native version ──────────────────────────────────────────────────────────
 function WebFileInputNative({
   label,
@@ -18,8 +39,9 @@ function WebFileInputNative({
   const handlePress = async () => {
     try {
       const DocumentPicker = require("expo-document-picker");
+      const mimeTypes = mapExtensionsToMimeTypes(accept);
       const result = await DocumentPicker.getDocumentAsync({
-        type: accept.split(",").map((a) => a.trim()),
+        type: mimeTypes,
         copyToCacheDirectory: true,
       });
 
