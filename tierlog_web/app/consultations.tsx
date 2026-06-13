@@ -7,7 +7,7 @@ import { WebFileInput } from "@/src/components/WebFileInput";
 import { MultiImageInput } from "@/src/components/MultiImageInput";
 import { GlassCard } from "@/src/components/ui/glass-card";
 import { Badge, Button, Heading, Page } from "@/src/components/ui";
-import { API_URL } from "@/src/lib/config";
+import { API_URL, getFileDownloadUrl } from "@/src/lib/config";
 import { useAuth } from "@/src/providers/AuthProvider";
 import { useWebSocket, useIsMobile } from "@/src/hooks";
 import type { ConsultationLog, FeedbackItem, RevisionAnnotation } from "@/src/types";
@@ -169,6 +169,7 @@ export default function ConsultationsScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0.24);
   const [audioTime, setAudioTime] = useState("02:14");
+  const audioIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [commentingOnFeedbackId, setCommentingOnFeedbackId] = useState<number | null>(null);
   const [commentText, setCommentText] = useState("");
 
@@ -179,6 +180,17 @@ export default function ConsultationsScreen() {
   // Fix proof text state
   const [fixingFeedbackId, setFixingFeedbackId] = useState<number | null>(null);
   const [fixProofText, setFixProofText] = useState("");
+
+  // Topic mismatch detection state
+  const [mismatchCheck, setMismatchCheck] = useState<{
+    is_mismatch: boolean;
+    confidence: string;
+    message: string;
+    audio_topic?: string;
+    paper_topic?: string;
+  } | null>(null);
+  const [checkingMismatch, setCheckingMismatch] = useState(false);
+  const [showMismatchModal, setShowMismatchModal] = useState(false);
 
   // Collapsible comments state
   const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
@@ -396,7 +408,46 @@ export default function ConsultationsScreen() {
     }
   }, [selected?.id]);
 
-  const uploadConsultation = async () => {
+  // Check for topic mismatch between audio and draft before uploading
+  const checkMismatch = async () => {
+    if (!paperFile || !audioFile) {
+      return;
+    }
+
+    setCheckingMismatch(true);
+    setError("");
+    try {
+      const body = new FormData();
+      body.append("paper", paperFile);
+      body.append("audio", audioFile);
+      
+      const result = await api<{
+        is_mismatch: boolean;
+        confidence: string;
+        message: string;
+        audio_topic?: string;
+        paper_topic?: string;
+        proceed: boolean;
+      }>("/consultations/check-mismatch", { method: "POST", body, headers: {} });
+
+      setMismatchCheck(result);
+      
+      if (result.is_mismatch && result.confidence !== "low") {
+        setShowMismatchModal(true);
+      } else {
+        // No mismatch or low confidence, proceed with upload
+        await doUploadConsultation();
+      }
+    } catch (err) {
+      // If check fails, proceed with upload anyway
+      console.warn("Mismatch check failed, proceeding with upload:", err);
+      await doUploadConsultation();
+    } finally {
+      setCheckingMismatch(false);
+    }
+  };
+
+  const doUploadConsultation = async () => {
     if (!paperFile || !audioFile) {
       setError("Please select the manuscript (.docx) and the audio recording (.mp3/.wav) before proceeding.");
       return;
@@ -416,12 +467,23 @@ export default function ConsultationsScreen() {
       setPaperFile(null);
       setAudioFile(null);
       setAnnotationFiles([]);
+      setMismatchCheck(null);
+      setShowMismatchModal(false);
       await loadLogs();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setLoading(false);
     }
+  };
+
+  const uploadConsultation = async () => {
+    if (!paperFile || !audioFile) {
+      setError("Please select the manuscript (.docx) and the audio recording (.mp3/.wav) before proceeding.");
+      return;
+    }
+    // First check for mismatch, then upload
+    await checkMismatch();
   };
 
   const sendChat = async () => {
@@ -568,7 +630,11 @@ export default function ConsultationsScreen() {
     setIsTranscribing(true);
     setTimeout(() => {
       setIsTranscribing(false);
-      Alert.alert("Success", "AI transcript has been successfully reprocessed and synchronized.");
+      if (Platform.OS === "web") {
+        alert("Success: AI transcript has been successfully reprocessed and synchronized.");
+      } else {
+        Alert.alert("Success", "AI transcript has been successfully reprocessed and synchronized.");
+      }
     }, 2000);
   };
 
@@ -576,7 +642,11 @@ export default function ConsultationsScreen() {
     setIsAnalyzing(true);
     setTimeout(() => {
       setIsAnalyzing(false);
-      Alert.alert("Success", "Feedback metrics and version consistency analysis have been updated.");
+      if (Platform.OS === "web") {
+        alert("Success: Feedback metrics and version consistency analysis have been updated.");
+      } else {
+        Alert.alert("Success", "Feedback metrics and version consistency analysis have been updated.");
+      }
     }, 2000);
   };
 
@@ -603,13 +673,24 @@ export default function ConsultationsScreen() {
   };
 
   const togglePlayback = () => {
-    setIsPlaying(!isPlaying);
-    if (!isPlaying) {
-      const interval = setInterval(() => {
+    if (isPlaying) {
+      // Pause: clear the interval
+      if (audioIntervalRef.current) {
+        clearInterval(audioIntervalRef.current);
+        audioIntervalRef.current = null;
+      }
+      setIsPlaying(false);
+    } else {
+      // Play: start a new interval
+      setIsPlaying(true);
+      audioIntervalRef.current = setInterval(() => {
         setAudioProgress(prev => {
           if (prev >= 1) {
             setIsPlaying(false);
-            clearInterval(interval);
+            if (audioIntervalRef.current) {
+              clearInterval(audioIntervalRef.current);
+              audioIntervalRef.current = null;
+            }
             return 1;
           }
           return prev + 0.01;
@@ -756,7 +837,7 @@ export default function ConsultationsScreen() {
                             )}
                           </View>
                           <Pressable
-                            onPress={() => Linking.openURL(`${API_URL}/storage/final/${encodeURIComponent(selected!.final_document_filename!)}`)}
+                            onPress={() => Linking.openURL(getFileDownloadUrl("final", selected!.final_document_filename!, accessToken!))}
                             className="px-2.5 py-2 rounded-md border border-emerald-500/[0.15] bg-emerald-500/[0.08]"
                             style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                           >
@@ -812,7 +893,7 @@ export default function ConsultationsScreen() {
                             )}
                           </View>
                           <Pressable
-                            onPress={() => Linking.openURL(`${API_URL}/storage/revised/${encodeURIComponent(selected!.revised_document_filename!)}`)}
+                            onPress={() => Linking.openURL(getFileDownloadUrl("revised", selected!.revised_document_filename!, accessToken!))}
                             className="px-2.5 py-2 rounded-md border border-violet-500/[0.15] bg-violet-500/[0.08]"
                             style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                           >
@@ -825,9 +906,9 @@ export default function ConsultationsScreen() {
 
                   <View className="mt-2 mb-4">
                     <Button
-                      title={loading ? "Processing..." : "Analyze Revision Session"}
+                      title={loading ? "Processing..." : checkingMismatch ? "Checking Topics..." : "Analyze Revision Session"}
                       onPress={() => void uploadConsultation()}
-                      disabled={loading}
+                      disabled={loading || checkingMismatch}
                     />
                   </View>
                 </View>
@@ -917,7 +998,7 @@ export default function ConsultationsScreen() {
                       <Text className="text-lg font-black tracking-tight text-slate-50">Advisory Workspace</Text>
                       {selected && (
                         <Pressable
-                          onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(selected.paper_filename)}`)}
+                          onPress={() => Linking.openURL(getFileDownloadUrl("paper", selected.paper_filename, accessToken!))}
                           className="flex-row items-center gap-1 w-full"
                           style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                         >
@@ -1111,17 +1192,24 @@ export default function ConsultationsScreen() {
                                     <Pressable
                                       disabled={isFixed}
                                       onPress={() => {
-                                        Alert.alert(
-                                          "Konfirmasi Tindakan",
-                                          "Apakah Anda yakin ingin menandai revisi ini sebagai selesai? Tindakan ini hanya dapat dilakukan sekali dan tidak dapat dibatalkan (undo).",
-                                          [
-                                            { text: "Batal", style: "cancel" },
-                                            {
-                                              text: "Ya, Selesai",
-                                              onPress: () => void updateStatus(item, "Fixed")
-                                            }
-                                          ]
-                                        );
+                                        if (Platform.OS === "web") {
+                                          const confirm = window.confirm("Apakah Anda yakin ingin menandai revisi ini sebagai selesai? Tindakan ini hanya dapat dilakukan sekali dan tidak dapat dibatalkan (undo).");
+                                          if (confirm) {
+                                            void updateStatus(item, "Fixed");
+                                          }
+                                        } else {
+                                          Alert.alert(
+                                            "Konfirmasi Tindakan",
+                                            "Apakah Anda yakin ingin menandai revisi ini sebagai selesai? Tindakan ini hanya dapat dilakukan sekali dan tidak dapat dibatalkan (undo).",
+                                            [
+                                              { text: "Batal", style: "cancel" },
+                                              {
+                                                text: "Ya, Selesai",
+                                                onPress: () => void updateStatus(item, "Fixed")
+                                              }
+                                            ]
+                                          );
+                                        }
                                       }}
                                       className="flex-row items-center rounded-lg px-3 py-2"
                                       style={({ pressed }) => ({
@@ -1283,7 +1371,7 @@ export default function ConsultationsScreen() {
                                   </Text>
                                 </View>
                                 <Pressable
-                                  onPress={() => Linking.openURL(`${API_URL}/storage/annotations/${encodeURIComponent(ann.filename)}`)}
+                                  onPress={() => Linking.openURL(getFileDownloadUrl("annotations", ann.filename, accessToken!))}
                                   className="bg-violet-600/[0.08] px-2.5 py-2 rounded-md border border-violet-600/[0.15]"
                                   style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                                 >
@@ -1364,7 +1452,7 @@ export default function ConsultationsScreen() {
                                   </View>
                                   <View className="flex-row gap-2">
                                     <Pressable
-                                      onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
+                                      onPress={() => Linking.openURL(getFileDownloadUrl("paper", log.paper_filename, accessToken!))}
                                       className="px-2.5 py-2 rounded-md border border-cyan-600/[0.15] bg-cyan-600/[0.08]"
                                       style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                                     >
@@ -2020,6 +2108,87 @@ export default function ConsultationsScreen() {
           })}
         </View>
       </View>
+
+      {/* Topic Mismatch Warning Modal */}
+      {showMismatchModal && mismatchCheck && (
+        <View className="absolute inset-0 bg-black/60 items-center justify-center z-50" style={{ backdropFilter: "blur(8px)" }}>
+          <View className="bg-slate-900/[0.98] border border-amber-500/30 rounded-2xl p-6 mx-4 max-w-[420px] w-full gap-4">
+            <View className="flex-row items-center gap-3">
+              <View className="w-12 h-12 rounded-full bg-amber-500/20 items-center justify-center">
+                <Text className="text-2xl">⚠️</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-white text-lg font-black">Topik Tidak Sesuai</Text>
+                <Text className="text-amber-400 text-xs font-semibold">Deteksi potensi ketidakcocokan</Text>
+              </View>
+            </View>
+
+            <View className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 gap-3">
+              <Text className="text-slate-300 text-sm leading-[20px]">
+                {mismatchCheck.message}
+              </Text>
+              
+              {mismatchCheck.audio_topic && mismatchCheck.paper_topic && (
+                <View className="gap-2 mt-2">
+                  <View className="flex-row items-start gap-2">
+                    <Text className="text-amber-400 text-xs font-bold min-w-[70px]">Audio:</Text>
+                    <Text className="text-slate-300 text-xs flex-1">{mismatchCheck.audio_topic}</Text>
+                  </View>
+                  <View className="flex-row items-start gap-2">
+                    <Text className="text-indigo-400 text-xs font-bold min-w-[70px]">Draft:</Text>
+                    <Text className="text-slate-300 text-xs flex-1">{mismatchCheck.paper_topic}</Text>
+                  </View>
+                </View>
+              )}
+
+              <View className="flex-row items-center gap-2 mt-1">
+                <Text className="text-slate-500 text-xs">Confidence:</Text>
+                <View className={`px-2 py-0.5 rounded-full ${
+                  mismatchCheck.confidence === "high" 
+                    ? "bg-red-500/20" 
+                    : "bg-amber-500/20"
+                }`}>
+                  <Text className={`text-[10px] font-bold uppercase ${
+                    mismatchCheck.confidence === "high" 
+                      ? "text-red-400" 
+                      : "text-amber-400"
+                  }`}>
+                    {mismatchCheck.confidence}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <Text className="text-slate-400 text-xs leading-[18px]">
+              Pastikan draft yang di-upload adalah draft yang dibahas di sesi bimbingan audio ini. 
+              Jika tetap melanjutkan, hasil analisis mungkin tidak akurat.
+            </Text>
+
+            <View className="flex-row gap-3 mt-2">
+              <View className="flex-1">
+                <Button
+                  title="Batal"
+                  onPress={() => {
+                    setShowMismatchModal(false);
+                    setMismatchCheck(null);
+                  }}
+                  tone="secondary"
+                />
+              </View>
+              <View className="flex-1">
+                <Button
+                  title={loading ? "Menganalisis..." : "Tetap Lanjutkan"}
+                  onPress={() => {
+                    setShowMismatchModal(false);
+                    doUploadConsultation();
+                  }}
+                  tone="warning"
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
     </RequireAuth>
   );
 

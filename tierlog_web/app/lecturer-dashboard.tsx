@@ -17,7 +17,7 @@ import { ElegantButton } from "@/src/components/ui/elegant-button";
 import { NavBar } from "@/src/components/NavBar";
 import { RequireAuth } from "@/src/components/RequireAuth";
 import { Badge, Button, Card, Heading, Page, StatCard } from "@/src/components/ui";
-import { API_URL } from "@/src/lib/config";
+import { API_URL, getFileDownloadUrl } from "@/src/lib/config";
 import { useAuth } from "@/src/providers/AuthProvider";
 import { useIsMobile } from "@/src/hooks";
 import type { ConsultationLog, DashboardStats, FeedbackItem, StudentProfile } from "@/src/types";
@@ -942,7 +942,7 @@ export default function LecturerDashboardScreen() {
                                         <Text className="text-slate-300 text-xs font-semibold" numberOfLines={1}>{latestLog.paper_filename}</Text>
                                       </View>
                                       <Pressable
-                                        onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(latestLog.paper_filename)}`)}
+                                        onPress={() => Linking.openURL(getFileDownloadUrl("paper", latestLog.paper_filename, accessToken!))}
                                         className="px-2.5 py-2 rounded-lg bg-indigo-500/[0.12] border border-indigo-500/[0.25]"
                                       >
                                         <Text className="text-indigo-400 text-[10px] font-extrabold">DOWNLOAD DRAFT</Text>
@@ -956,10 +956,24 @@ export default function LecturerDashboardScreen() {
                                         <Text className="text-slate-300 text-xs font-semibold" numberOfLines={1}>{latestLog.revised_document_filename}</Text>
                                       </View>
                                       <Pressable
-                                        onPress={() => Linking.openURL(`${API_URL}/storage/revised/${encodeURIComponent(latestLog.revised_document_filename || "")}`)}
+                                        onPress={() => Linking.openURL(getFileDownloadUrl("revised", latestLog.revised_document_filename || "", accessToken!))}
                                         className="px-2.5 py-2 rounded-lg bg-violet-500/[0.12] border border-violet-500/[0.25]"
                                       >
                                         <Text className="text-violet-400 text-[10px] font-extrabold">DOWNLOAD REVISED</Text>
+                                      </Pressable>
+                                    </View>
+                                  ) : null}
+                                  {latestLog.final_document_filename ? (
+                                    <View className="mt-2 border-t border-white/[0.06] pt-2.5 flex-row justify-between items-center">
+                                      <View className="flex-1 mr-2">
+                                        <Text className="text-emerald-400 text-[8px] font-extrabold tracking-widest uppercase mb-0.5">FINAL DOCUMENT</Text>
+                                        <Text className="text-slate-300 text-xs font-semibold" numberOfLines={1}>{latestLog.final_document_filename}</Text>
+                                      </View>
+                                      <Pressable
+                                        onPress={() => Linking.openURL(getFileDownloadUrl("final", latestLog.final_document_filename || "", accessToken!))}
+                                        className="px-2.5 py-2 rounded-lg bg-emerald-500/[0.12] border border-emerald-500/[0.25]"
+                                      >
+                                        <Text className="text-emerald-400 text-[10px] font-extrabold">DOWNLOAD FINAL</Text>
                                       </Pressable>
                                     </View>
                                   ) : null}
@@ -1046,7 +1060,7 @@ export default function LecturerDashboardScreen() {
                                     <View className="flex-row items-center gap-1.5 flex-wrap">
                                       {log.paper_filename && (
                                         <Pressable
-                                          onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
+                                          onPress={() => Linking.openURL(getFileDownloadUrl("paper", log.paper_filename, accessToken!))}
                                           className="px-1.5 py-0.5 rounded bg-indigo-500/[0.06] border border-indigo-500/[0.12]"
                                         >
                                           <Text className="text-indigo-500 text-[9px] font-bold">
@@ -1702,7 +1716,7 @@ export default function LecturerDashboardScreen() {
                                         <Text className="text-slate-300 text-xs font-semibold" numberOfLines={1}>{latestLog.paper_filename}</Text>
                                       </View>
                                       <Pressable
-                                        onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(latestLog.paper_filename)}`)}
+                                        onPress={() => Linking.openURL(getFileDownloadUrl("paper", latestLog.paper_filename, accessToken!))}
                                         className="px-3 py-1.5 rounded-lg bg-indigo-500/[0.12] border border-indigo-500/[0.25]"
                                         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                                       >
@@ -1722,11 +1736,31 @@ export default function LecturerDashboardScreen() {
                                         )}
                                       </View>
                                       <Pressable
-                                        onPress={() => Linking.openURL(`${API_URL}/storage/revised/${encodeURIComponent(latestLog.revised_document_filename || "")}`)}
+                                        onPress={() => Linking.openURL(getFileDownloadUrl("revised", latestLog.revised_document_filename || "", accessToken!))}
                                         className="px-3 py-1.5 rounded-lg bg-violet-500/[0.12] border border-violet-500/[0.25]"
                                         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                                       >
                                         <Text className="text-violet-500 text-[11px] font-extrabold tracking-[0.5px]">DOWNLOAD REVISED</Text>
+                                      </Pressable>
+                                    </View>
+                                  ) : null}
+                                  {latestLog.final_document_filename ? (
+                                    <View className="mt-2 border-t border-white/[0.06] pt-3 flex-row justify-between items-center">
+                                      <View className="flex-1 mr-2.5">
+                                        <Text className="text-emerald-400 text-[9px] font-extrabold tracking-widest uppercase mb-0.5">FINAL DOCUMENT</Text>
+                                        <Text className="text-slate-300 text-xs font-semibold" numberOfLines={1}>{latestLog.final_document_filename}</Text>
+                                        {latestLog.final_document_uploaded_at && (
+                                          <Text className="text-slate-400 text-[10px] mt-0.5">
+                                            Uploaded: {new Date(latestLog.final_document_uploaded_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
+                                          </Text>
+                                        )}
+                                      </View>
+                                      <Pressable
+                                        onPress={() => Linking.openURL(getFileDownloadUrl("final", latestLog.final_document_filename || "", accessToken!))}
+                                        className="px-3 py-1.5 rounded-lg bg-emerald-500/[0.12] border border-emerald-500/[0.25]"
+                                        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                                      >
+                                        <Text className="text-emerald-500 text-[11px] font-extrabold tracking-[0.5px]">DOWNLOAD FINAL</Text>
                                       </Pressable>
                                     </View>
                                   ) : null}
@@ -2120,7 +2154,7 @@ export default function LecturerDashboardScreen() {
                                       )}
                                       {log.paper_filename && (
                                         <Pressable
-                                          onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
+                                          onPress={() => Linking.openURL(getFileDownloadUrl("paper", log.paper_filename, accessToken!))}
                                           className="px-2 py-0.5 rounded-md bg-indigo-500/[0.06] border border-indigo-500/[0.12]"
                                           style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
                                         >

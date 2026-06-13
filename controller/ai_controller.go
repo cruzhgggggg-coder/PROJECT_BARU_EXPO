@@ -80,8 +80,8 @@ const transcriptPlaceholder = "[INJECT_ORIGINAL_TRANSCRIPT_HERE]"
 // ─────────────────────────────────────────────────────────────────────────────
 
 const (
-	// maxChunkBytes: Groq hard-limit is 25 MB; we use 20 MB to stay safely below it
-	maxChunkBytes int64 = 20 * 1024 * 1024 // 20 MB
+	// maxChunkBytes: Groq hard-limit is 25 MB; we use 24 MB to stay safely below it
+	maxChunkBytes int64 = 24 * 1024 * 1024 // 24 MB
 	// groqTimeout: 5 minutes per chunk request to handle slow networks or long audio
 	groqTimeout = 300 * time.Second
 )
@@ -157,9 +157,9 @@ func transcribeAudio(audioPath string, userGroqKey ...string) (string, error) {
 		return transcribeChunk(apiKey, audioData, filepath.Base(audioPath))
 	}
 
-	// ── Chunked path: split file into ≤20 MB byte slices ────────────────────
+	// ── Chunked path: split file into ≤24 MB byte slices ────────────────────
 	totalChunks := int((totalSize + maxChunkBytes - 1) / maxChunkBytes) // ceiling division
-	debugLog("\033[33m[GROQ STT] File exceeds 20 MB — splitting into %d chunks...\033[0m\n", totalChunks)
+	debugLog("\033[33m[GROQ STT] File exceeds 24 MB — splitting into %d chunks. Note: chunked splitting may produce less accurate results for audio files.\033[0m\n", totalChunks)
 
 	var transcripts []string
 	var offset int64
@@ -880,6 +880,108 @@ func callAIVision(user *models.User, systemPrompt, userPrompt, imagePath string)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  TOPIC MISMATCH DETECTION — Validate audio & draft consistency
+// ─────────────────────────────────────────────────────────────────────────────
+
+// MismatchResult represents the result of a topic mismatch check
+type MismatchResult struct {
+	IsMismatch bool   `json:"is_mismatch"`
+	Confidence string `json:"confidence"` // "high", "medium", "low"
+	Message    string `json:"message"`
+	AudioTopic string `json:"audio_topic"`
+	PaperTopic string `json:"paper_topic"`
+}
+
+// DetectTopicMismatch checks if the audio transcript and draft paper are about the same topic
+// Returns a MismatchResult with details about the match
+func DetectTopicMismatch(user *models.User, transcript, paperText string) (*MismatchResult, error) {
+	// Skip if either text is too short to analyze
+	if len(transcript) < 50 || len(paperText) < 50 {
+		return &MismatchResult{
+			IsMismatch: false,
+			Confidence: "low",
+			Message:    "Teks terlalu singkat untuk dianalisis",
+		}, nil
+	}
+
+	// Truncate texts to avoid token limits (use first 2000 chars of each)
+	maxLen := 2000
+	if len(transcript) > maxLen {
+		transcript = transcript[:maxLen]
+	}
+	if len(paperText) > maxLen {
+		paperText = paperText[:maxLen]
+	}
+
+	systemPrompt := `Kamu adalah asisten yang bertugas memvalidasi apakah rekaman bimbingan (audio) dan draft paper mahasiswa membahas topik yang sama.
+
+TUGASMU:
+1. Analisis transkrip audio dan teks paper
+2. Tentukan apakah keduanya membahas topik/bab yang sama
+3. Identifikasi topik utama dari masing-masing
+
+CONTOH MISMATCH:
+- Audio membahas "Bab 2: Tinjauan Pustaka" tapi paper berisi "Bab 1: Pendahuluan"
+- Audio membahas "Metodologi Penelitian" tapi paper berisi "Hasil dan Pembahasan"
+- Audio membahas tentang "algoritma sorting" tapi paper membahas tentang "machine learning"
+
+CONTOH MATCH:
+- Audio membahas "Bab 2: Tinjauan Pustaka" dan paper berisi "BAB 2: TINJAUAN PUSTAKA"
+- Audio membahas revisi metodologi dan paper berisi bagian metodologi
+
+KAMU WAJIB mengembalikan output dalam format JSON:
+{
+  "is_mismatch": true/false,
+  "confidence": "high" atau "medium" atau "low",
+  "audio_topic": "topik utama dari audio",
+  "paper_topic": "topik utama dari paper",
+  "message": "penjelasan singkat hasil analisis"
+}`
+
+	userPrompt := fmt.Sprintf(`TRANSKRIP AUDIO:
+"%s"
+
+TEKS PAPER:
+"%s"
+
+Analisis apakah audio dan paper membahas topik yang sama.`, transcript, paperText)
+
+	rawResponse, err := callAI(user, systemPrompt, userPrompt, true)
+	if err != nil {
+		// If AI fails, assume no mismatch (let the analysis proceed)
+		debugLog("[MISMATCH] AI check failed: %v — assuming match\n", err)
+		return &MismatchResult{
+			IsMismatch: false,
+			Confidence: "low",
+			Message:    "Gagal memvalidasi topik, melanjutkan analisis",
+		}, nil
+	}
+
+	// Parse JSON response
+	cleanJSON := strings.TrimSpace(rawResponse)
+	if strings.HasPrefix(cleanJSON, "```json") {
+		cleanJSON = strings.TrimPrefix(cleanJSON, "```json")
+		cleanJSON = strings.TrimSuffix(cleanJSON, "```")
+	} else if strings.HasPrefix(cleanJSON, "```") {
+		cleanJSON = strings.TrimPrefix(cleanJSON, "```")
+		cleanJSON = strings.TrimSuffix(cleanJSON, "```")
+	}
+	cleanJSON = strings.TrimSpace(cleanJSON)
+
+	var result MismatchResult
+	if err := json.Unmarshal([]byte(cleanJSON), &result); err != nil {
+		debugLog("[MISMATCH] Failed to parse response: %v — assuming match\n", err)
+		return &MismatchResult{
+			IsMismatch: false,
+			Confidence: "low",
+			Message:    "Gagal memparse hasil validasi, melanjutkan analisis",
+		}, nil
+	}
+
+	return &result, nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  ANALYSIS LOGIC (GROQ + NVIDIA)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -891,7 +993,7 @@ type FeedbackResponse struct {
 func AnalyzeAudioAndPaper(userID uint64, audioPath, paperText, prevFeedback string) ([]models.FeedbackItem, string, error) {
 	// Fetch user for AI Gateway settings
 	var user models.User
-	koneksi.DB.First(&user, userID)
+	koneksi.DB.Preload("Student").First(&user, userID)
 
 	// Decrypt API keys before using
 	decryptUserKeys(&user)

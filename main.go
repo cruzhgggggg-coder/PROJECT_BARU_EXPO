@@ -106,6 +106,9 @@ func main() {
 
 	r.GET("/ws", hub.HandleWebSocket)
 
+	// File download — auth via query parameter for Linking.openURL()
+	r.GET("/download", controller.DownloadFile)
+
 	r.POST("/auth/register", middleware.RateLimit(authLimiter), controller.Register)
 	r.POST("/auth/login", middleware.RateLimit(authLimiter), controller.Login)
 	r.POST("/auth/refresh", middleware.RateLimit(authLimiter), controller.Refresh)
@@ -122,6 +125,7 @@ func main() {
 		protected.POST("/settings/ai-gateway/redeem", controller.RedeemGatewayCodeV2)
 
 		protected.GET("/dashboard/stats", controller.DashboardStatsV2)
+		protected.POST("/consultations/check-mismatch", controller.CheckTopicMismatch)
 		protected.GET("/consultations", controller.ConsultationListV2)
 		protected.POST("/consultations", controller.CreateConsultationV2)
 		protected.POST("/consultations/chat", controller.ConsultationChatV2)

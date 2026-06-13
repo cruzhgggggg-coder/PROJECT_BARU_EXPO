@@ -11,10 +11,11 @@ import { Heading, Page, Badge } from "@/src/components/ui";
 import { useAuth } from "@/src/providers/AuthProvider";
 import { useIsMobile } from "@/src/hooks";
 import type { ConsultationLog, StudentProfile } from "@/src/types";
-import { API_URL } from "@/src/lib/config";
+import { API_URL, getFileDownloadUrl } from "@/src/lib/config";
 
 // ─── Timeline Item (Session Card) ─────────────────────────────
 function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNumber: number }) {
+  const { accessToken } = useAuth();
   const [activeTab, setActiveTab] = useState<"feedback" | "transcript" | "annotations">("feedback");
   const [expanded, setExpanded] = useState(false);
   const isAllValidated = !log.feedback_items || log.feedback_items.length === 0 || log.feedback_items.every((item) => item.status === "Validated");
@@ -83,7 +84,7 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
             {/* Download links */}
             <View className="flex-row gap-3 flex-wrap">
               <Pressable
-                onPress={() => Linking.openURL(`${API_URL}/storage/paper/${encodeURIComponent(log.paper_filename)}`)}
+                onPress={() => Linking.openURL(getFileDownloadUrl("paper", log.paper_filename, accessToken!))}
                 style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
               >
                 <Text className="text-[11px] font-bold text-[#3B82F6] underline">
@@ -92,11 +93,21 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
               </Pressable>
               {log.revised_document_filename && (
                 <Pressable
-                  onPress={() => Linking.openURL(`${API_URL}/storage/revised/${encodeURIComponent(log.revised_document_filename || "")}`)}
+                  onPress={() => Linking.openURL(getFileDownloadUrl("revised", log.revised_document_filename || "", accessToken!))}
                   style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                 >
                   <Text className="text-[11px] font-bold text-[#7C3AED] underline">
                     Download Revised Draft
+                  </Text>
+                </Pressable>
+              )}
+              {log.final_document_filename && (
+                <Pressable
+                  onPress={() => Linking.openURL(getFileDownloadUrl("final", log.final_document_filename || "", accessToken!))}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <Text className="text-[11px] font-bold text-[#059669] underline">
+                    Download Final Document
                   </Text>
                 </Pressable>
               )}

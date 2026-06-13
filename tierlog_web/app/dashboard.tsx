@@ -32,7 +32,22 @@ export default function DashboardScreen() {
 
   const loadData = useCallback(async () => {
     if (booting || !accessToken) return;
-    if (user?.role === "lecturer") return;
+    if (user?.role === "lecturer") {
+      // Fetch lecturer-specific data
+      try {
+        const [statsRes, studentsRes, consultRes] = await Promise.all([
+          api<DashboardStats>("/dashboard/stats"),
+          api<{ data: StudentProfile[] }>("/lecturer/students"),
+          api<{ data: ConsultationLog[] }>("/lecturer/consultations"),
+        ]);
+        setStats(statsRes);
+        setStudents(studentsRes.data ?? []);
+        setConsultations(consultRes.data ?? []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load stats");
+      }
+      return;
+    }
     try {
       const [s, c] = await Promise.all([
         api<DashboardStats>("/dashboard/stats"),
@@ -46,12 +61,6 @@ export default function DashboardScreen() {
       setError(err instanceof Error ? err.message : "Failed to load stats");
     }
   }, [api, booting, accessToken, user?.role]);
-
-  useEffect(() => {
-    if (user?.role === "lecturer") {
-      router.replace("/lecturer-dashboard");
-    }
-  }, [user?.role]);
 
   const loadDataRef = useRef(loadData);
   loadDataRef.current = loadData;

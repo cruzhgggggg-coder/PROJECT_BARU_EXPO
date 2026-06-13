@@ -529,6 +529,9 @@ func queryScopeForUser(query *gorm.DB, user *models.User) *gorm.DB {
 	case models.RoleStudent:
 		return query.Joins("JOIN students ON students.id = consultation_logs.student_id").Where("students.user_id = ?", user.ID)
 	case models.RoleLecturer:
+		if user.Lecturer == nil {
+			return query.Where("1 = 0") // Return no results if lecturer profile is missing
+		}
 		return query.Joins("JOIN students ON students.id = consultation_logs.student_id").Where("students.lecturer_id = ?", user.Lecturer.ID)
 	default:
 		return query
@@ -615,6 +618,9 @@ func accessibleLog(user *models.User, logID uint64) (*models.ConsultationLog, er
 	case models.RoleStudent:
 		query = query.Joins("JOIN students ON students.id = consultation_logs.student_id").Where("consultation_logs.id = ? AND students.user_id = ?", logID, user.ID)
 	case models.RoleLecturer:
+		if user.Lecturer == nil {
+			return nil, errors.New("lecturer profile not found")
+		}
 		query = query.Joins("JOIN students ON students.id = consultation_logs.student_id").Where("consultation_logs.id = ? AND students.lecturer_id = ?", logID, user.Lecturer.ID)
 	default:
 		return nil, errors.New("unsupported role")
@@ -640,7 +646,7 @@ func accessibleLog(user *models.User, logID uint64) (*models.ConsultationLog, er
 			log.FeedbackItems[i].Comments = commentMap[log.FeedbackItems[i].ID]
 		}
 	}
-	koneksi.DB.Where("user_id = ?", log.StudentID).First(&log.Student)
+	koneksi.DB.Where("id = ?", log.StudentID).First(&log.Student)
 	if log.Student != nil {
 		koneksi.DB.Where("id = ?", log.Student.UserID).First(&log.Student.User)
 		koneksi.DB.Where("id = ?", log.Student.LecturerID).First(&log.Student.Lecturer)
@@ -658,6 +664,9 @@ func accessibleLogLight(user *models.User, logID uint64) (*models.ConsultationLo
 	case models.RoleStudent:
 		query = query.Joins("JOIN students ON students.id = consultation_logs.student_id").Where("consultation_logs.id = ? AND students.user_id = ?", logID, user.ID)
 	case models.RoleLecturer:
+		if user.Lecturer == nil {
+			return nil, errors.New("lecturer profile not found")
+		}
 		query = query.Joins("JOIN students ON students.id = consultation_logs.student_id").Where("consultation_logs.id = ? AND students.lecturer_id = ?", logID, user.Lecturer.ID)
 	default:
 		return nil, errors.New("unsupported role")
@@ -713,6 +722,108 @@ func ConsultationListV2(c *gin.Context) {
 
 func ArchiveListV2(c *gin.Context) {
 	ConsultationListV2(c)
+}
+
+// CheckTopicMismatch validates if audio and draft paper are about the same topic
+// before running the full analysis. Returns mismatch details if detected.
+func CheckTopicMismatch(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if user.Role != models.RoleStudent {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only students can check mismatch"})
+		return
+	}
+
+	audioFile, err := c.FormFile("audio")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Audio file is required"})
+		return
+	}
+
+	if err := validateUploadedFile(audioFile, []string{".mp3", ".wav", ".m4a", ".ogg", ".webm"}, 100*1024*1024); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Audio file invalid: %v", err)})
+		return
+	}
+
+	paperFile, err := c.FormFile("paper")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Paper file is required"})
+		return
+	}
+
+	if err := validateUploadedFile(paperFile, []string{".docx"}, 50*1024*1024); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Paper file invalid: %v", err)})
+		return
+	}
+
+	// Save files temporarily for analysis
+	timestamp := time.Now().UnixNano()
+	audioFilename := fmt.Sprintf("%d_%s", timestamp, audioFile.Filename)
+	audioPath := filepath.Join("storage", "audio", audioFilename)
+	if err := c.SaveUploadedFile(audioFile, audioPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save audio file"})
+		return
+	}
+	defer os.Remove(audioPath) // Clean up temp file
+
+	paperFilename := fmt.Sprintf("%d_%s", timestamp, paperFile.Filename)
+	paperPath := filepath.Join("storage", "paper", paperFilename)
+	if err := c.SaveUploadedFile(paperFile, paperPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save paper file"})
+		return
+	}
+	defer os.Remove(paperPath) // Clean up temp file
+
+	// Extract text from paper
+	paperText, err := utils.ReadDocxText(paperPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to extract text from docx: " + err.Error()})
+		return
+	}
+
+	// Transcribe audio
+	var student models.Student
+	if err := koneksi.DB.Where("user_id = ?", user.ID).First(&student).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Student profile not found"})
+		return
+	}
+
+	// Get user with AI keys
+	var userWithKeys models.User
+	koneksi.DB.First(&userWithKeys, user.ID)
+	decryptUserKeys(&userWithKeys)
+
+	transcript, err := transcribeAudio(audioPath, userWithKeys.GroqKey)
+	if err != nil {
+		// If transcription fails, skip mismatch check
+		c.JSON(http.StatusOK, gin.H{
+			"is_mismatch": false,
+			"confidence":  "low",
+			"message":     "Gagal mentranskripsi audio, validasi dilewati",
+			"proceed":     true,
+		})
+		return
+	}
+
+	// Detect mismatch
+	mismatchResult, err := DetectTopicMismatch(&userWithKeys, transcript, paperText)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"is_mismatch": false,
+			"confidence":  "low",
+			"message":     "Gagal memvalidasi topik, melanjutkan analisis",
+			"proceed":     true,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"is_mismatch": mismatchResult.IsMismatch,
+		"confidence":  mismatchResult.Confidence,
+		"message":     mismatchResult.Message,
+		"audio_topic": mismatchResult.AudioTopic,
+		"paper_topic": mismatchResult.PaperTopic,
+		"proceed":     !mismatchResult.IsMismatch || mismatchResult.Confidence == "low",
+	})
 }
 
 func CreateConsultationV2(c *gin.Context) {
@@ -1612,4 +1723,62 @@ SAVE_TO_DB:
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Feedback items classified successfully", "data": updatedItems})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  FILE DOWNLOAD — Authenticated via query parameter
+// ─────────────────────────────────────────────────────────────────────────────
+
+// DownloadFile serves storage files with auth via query parameter.
+// This is needed because Linking.openURL() (used for downloads) opens a new
+// browser tab that cannot set Authorization headers.
+func DownloadFile(c *gin.Context) {
+	// Auth via query parameter
+	token := c.Query("token")
+	if token == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Token required"})
+		return
+	}
+
+	claims, err := auth.ParseAccessToken(token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	var user models.User
+	if err := koneksi.DB.First(&user, claims.UserID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Get file parameters
+	section := c.Query("section")
+	filename := c.Query("file")
+	if section == "" || filename == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "section and file params required"})
+		return
+	}
+
+	// Validate section (prevent path traversal)
+	allowedSections := map[string]bool{
+		"paper": true, "audio": true, "revised": true,
+		"final": true, "transcript": true, "annotations": true,
+	}
+	if !allowedSections[section] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid section"})
+		return
+	}
+
+	// Build safe file path — filepath.Base prevents directory traversal
+	filePath := filepath.Join("storage", section, filepath.Base(filename))
+
+	// Check file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+		return
+	}
+
+	// Serve the file
+	c.File(filePath)
 }

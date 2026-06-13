@@ -9,6 +9,7 @@ import (
 	"testing_go/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // GetUsers fetches all users
@@ -114,11 +115,25 @@ func UpdateAIGatewaySettings(c *gin.Context) {
 
 	user := currentUser
 
-	user.OpenAIKey = req.OpenAIKey
-	user.GeminiKey = req.GeminiKey
-	user.AnthropicKey = req.AnthropicKey
-	user.NvidiaKey = req.NvidiaKey
-	user.PreferredModel = req.PreferredModel
+	// Decrypt existing keys so we have the plaintext versions
+	decryptUserKeys(user)
+
+	// Only overwrite keys if the incoming value is NOT the masked placeholder
+	if req.OpenAIKey != "••••••••••••••••" {
+		user.OpenAIKey = req.OpenAIKey
+	}
+	if req.GeminiKey != "••••••••••••••••" {
+		user.GeminiKey = req.GeminiKey
+	}
+	if req.AnthropicKey != "••••••••••••••••" {
+		user.AnthropicKey = req.AnthropicKey
+	}
+	if req.NvidiaKey != "••••••••••••••••" {
+		user.NvidiaKey = req.NvidiaKey
+	}
+	if req.PreferredModel != "" {
+		user.PreferredModel = req.PreferredModel
+	}
 
 	// Encrypt API keys before storing
 	encryptUserKeys(user)
@@ -156,14 +171,27 @@ func RedeemGatewayCode(c *gin.Context) {
 
 	user := currentUser
 
-	// Mark code as used
-	redeemCode.IsUsed = true
-	redeemCode.UsedBy = &user.ID
-	koneksi.DB.Save(&redeemCode)
+	// Use transaction to ensure atomicity
+	err := koneksi.DB.Transaction(func(tx *gorm.DB) error {
+		// Mark code as used
+		redeemCode.IsUsed = true
+		redeemCode.UsedBy = &user.ID
+		if err := tx.Save(&redeemCode).Error; err != nil {
+			return err
+		}
 
-	// Activate Gateway
-	user.IsGatewayActive = true
-	koneksi.DB.Save(user)
+		// Activate Gateway
+		user.IsGatewayActive = true
+		if err := tx.Save(user).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to activate gateway"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "AI Gateway Activated Successfully!"})
 }

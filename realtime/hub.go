@@ -204,10 +204,13 @@ func (h *Hub) Broadcast(room, event string, data any) {
 	}
 
 	h.mu.RLock()
-	clients := h.rooms[room]
+	clients := make([]*Client, 0, len(h.rooms[room]))
+	for client := range h.rooms[room] {
+		clients = append(clients, client)
+	}
 	h.mu.RUnlock()
 
-	for client := range clients {
+	for _, client := range clients {
 		client.mu.Lock()
 		if client.closed {
 			client.mu.Unlock()
