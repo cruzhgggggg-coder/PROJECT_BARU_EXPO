@@ -6,21 +6,34 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "splash": { "backgroundColor": "#020617" },
+    "splash": {
+      "backgroundColor": "#020617"
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#020617"
       },
       "package": "com.tierlog.app",
-      "permissions": ["INTERNET"],
-      "usesCleartextTraffic": true
+      "permissions": [
+        "INTERNET"
+      ]
     },
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png"
     },
-    "experiments": { "typedRoutes": true },
-    "plugins": ["expo-router"]
+    "experiments": {
+      "typedRoutes": true
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "46d90fd4-c6c5-42f7-a30e-ebe498de9459"
+      }
+    }
   }
 }

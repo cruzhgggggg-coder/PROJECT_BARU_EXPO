@@ -724,23 +724,12 @@ func ArchiveListV2(c *gin.Context) {
 	ConsultationListV2(c)
 }
 
-// CheckTopicMismatch validates if audio and draft paper are about the same topic
+// CheckTopicMismatch validates if audio/annotations and draft paper are about the same topic
 // before running the full analysis. Returns mismatch details if detected.
 func CheckTopicMismatch(c *gin.Context) {
 	user := middleware.CurrentUser(c)
 	if user.Role != models.RoleStudent {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only students can check mismatch"})
-		return
-	}
-
-	audioFile, err := c.FormFile("audio")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Audio file is required"})
-		return
-	}
-
-	if err := validateUploadedFile(audioFile, []string{".mp3", ".wav", ".m4a", ".ogg", ".webm"}, 100*1024*1024); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Audio file invalid: %v", err)})
 		return
 	}
 
@@ -755,15 +744,7 @@ func CheckTopicMismatch(c *gin.Context) {
 		return
 	}
 
-	// Save files temporarily for analysis
 	timestamp := time.Now().UnixNano()
-	audioFilename := fmt.Sprintf("%d_%s", timestamp, audioFile.Filename)
-	audioPath := filepath.Join("storage", "audio", audioFilename)
-	if err := c.SaveUploadedFile(audioFile, audioPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save audio file"})
-		return
-	}
-	defer os.Remove(audioPath) // Clean up temp file
 
 	paperFilename := fmt.Sprintf("%d_%s", timestamp, paperFile.Filename)
 	paperPath := filepath.Join("storage", "paper", paperFilename)
@@ -780,32 +761,79 @@ func CheckTopicMismatch(c *gin.Context) {
 		return
 	}
 
-	// Transcribe audio
-	var student models.Student
-	if err := koneksi.DB.Where("user_id = ?", user.ID).First(&student).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Student profile not found"})
-		return
-	}
-
 	// Get user with AI keys
 	var userWithKeys models.User
 	koneksi.DB.First(&userWithKeys, user.ID)
 	decryptUserKeys(&userWithKeys)
 
-	transcript, err := transcribeAudio(audioPath, userWithKeys.GroqKey)
-	if err != nil {
-		// If transcription fails, skip mismatch check
+	// 1. Process audio if uploaded
+	var transcript string
+	audioFile, err := c.FormFile("audio")
+	if err == nil {
+		if err := validateUploadedFile(audioFile, []string{".mp3", ".wav", ".m4a", ".ogg", ".webm"}, 100*1024*1024); err == nil {
+			audioFilename := fmt.Sprintf("%d_%s", timestamp, audioFile.Filename)
+			audioPath := filepath.Join("storage", "audio", audioFilename)
+			if err := c.SaveUploadedFile(audioFile, audioPath); err == nil {
+				defer os.Remove(audioPath)
+				transcript, _ = transcribeAudio(audioPath, userWithKeys.GroqKey)
+			}
+		}
+	}
+
+	// 2. Process annotations if uploaded
+	var annotationSummary string
+	if form, formErr := c.MultipartForm(); formErr == nil && len(form.File["annotations"]) > 0 {
+		annotationFiles := form.File["annotations"]
+		imageExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true}
+		var summaryParts []string
+		for i, fh := range annotationFiles {
+			ext := strings.ToLower(filepath.Ext(fh.Filename))
+			filename := fmt.Sprintf("%d_temp_annotation_%d%s", timestamp, i+1, ext)
+			savePath := filepath.Join("storage", "annotations", filename)
+			if err := c.SaveUploadedFile(fh, savePath); err != nil {
+				continue
+			}
+			defer os.Remove(savePath)
+
+			var extractedText string
+			if imageExts[ext] {
+				extractedText, _ = processAnnotationImage(savePath, &userWithKeys)
+			} else if ext == ".docx" {
+				extractedText, _ = utils.ExtractDocxTrackChanges(savePath)
+			}
+			if extractedText != "" {
+				label := fmt.Sprintf("[Anotasi %d — %s]", i+1, fh.Filename)
+				summaryParts = append(summaryParts, label+"\n"+extractedText)
+			}
+		}
+		if len(summaryParts) > 0 {
+			annotationSummary = strings.Join(summaryParts, "\n\n---\n\n")
+		}
+	}
+
+	// 3. Combine guidance text for comparison
+	var combinedGuidance []string
+	if transcript != "" {
+		combinedGuidance = append(combinedGuidance, "TRANSKRIP AUDIO:\n"+transcript)
+	}
+	if annotationSummary != "" {
+		combinedGuidance = append(combinedGuidance, "ANOTASI DOKUMEN DOSEN:\n"+annotationSummary)
+	}
+
+	if len(combinedGuidance) == 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"is_mismatch": false,
 			"confidence":  "low",
-			"message":     "Gagal mentranskripsi audio, validasi dilewati",
+			"message":     "Tidak ada instruksi bimbingan (audio maupun anotasi) untuk divalidasi",
 			"proceed":     true,
 		})
 		return
 	}
 
+	guidanceText := strings.Join(combinedGuidance, "\n\n")
+
 	// Detect mismatch
-	mismatchResult, err := DetectTopicMismatch(&userWithKeys, transcript, paperText)
+	mismatchResult, err := DetectTopicMismatch(&userWithKeys, guidanceText, paperText)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"is_mismatch": false,
@@ -840,14 +868,13 @@ func CreateConsultationV2(c *gin.Context) {
 	}
 
 	audioFile, err := c.FormFile("audio")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Audio file is required"})
-		return
+	var hasAnnotations bool
+	if form, formErr := c.MultipartForm(); formErr == nil && len(form.File["annotations"]) > 0 {
+		hasAnnotations = true
 	}
 
-	// Validate audio file
-	if err := validateUploadedFile(audioFile, []string{".mp3", ".wav", ".m4a", ".ogg", ".webm"}, 100*1024*1024); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Audio file invalid: %v", err)})
+	if err != nil && !hasAnnotations {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Audio file or at least one annotation file is required"})
 		return
 	}
 
@@ -864,11 +891,21 @@ func CreateConsultationV2(c *gin.Context) {
 	}
 
 	timestamp := time.Now().UnixNano()
-	audioFilename := fmt.Sprintf("%d_%s", timestamp, audioFile.Filename)
-	audioPath := filepath.Join("storage", "audio", audioFilename)
-	if err := c.SaveUploadedFile(audioFile, audioPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save audio file"})
-		return
+
+	var audioFilename string
+	var audioPath string
+	if audioFile != nil {
+		// Validate audio file
+		if err := validateUploadedFile(audioFile, []string{".mp3", ".wav", ".m4a", ".ogg", ".webm"}, 100*1024*1024); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Audio file invalid: %v", err)})
+			return
+		}
+		audioFilename = fmt.Sprintf("%d_%s", timestamp, audioFile.Filename)
+		audioPath = filepath.Join("storage", "audio", audioFilename)
+		if err := c.SaveUploadedFile(audioFile, audioPath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save audio file"})
+			return
+		}
 	}
 
 	paperFilename := fmt.Sprintf("%d_%s", timestamp, paperFile.Filename)

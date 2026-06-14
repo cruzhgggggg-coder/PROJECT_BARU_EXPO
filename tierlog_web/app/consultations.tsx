@@ -408,9 +408,9 @@ export default function ConsultationsScreen() {
     }
   }, [selected?.id]);
 
-  // Check for topic mismatch between audio and draft before uploading
+  // Check for topic mismatch between audio/annotations and draft before uploading
   const checkMismatch = async () => {
-    if (!paperFile || !audioFile) {
+    if (!paperFile || (!audioFile && annotationFiles.length === 0)) {
       return;
     }
 
@@ -419,7 +419,10 @@ export default function ConsultationsScreen() {
     try {
       const body = new FormData();
       body.append("paper", paperFile);
-      body.append("audio", audioFile);
+      if (audioFile) {
+        body.append("audio", audioFile);
+      }
+      annotationFiles.forEach((f) => body.append("annotations", f));
       
       const result = await api<{
         is_mismatch: boolean;
@@ -448,8 +451,12 @@ export default function ConsultationsScreen() {
   };
 
   const doUploadConsultation = async () => {
-    if (!paperFile || !audioFile) {
-      setError("Please select the manuscript (.docx) and the audio recording (.mp3/.wav) before proceeding.");
+    if (!paperFile) {
+      setError("Please select the manuscript (.docx) before proceeding.");
+      return;
+    }
+    if (!audioFile && annotationFiles.length === 0) {
+      setError("Please select either the audio recording (.mp3/.wav) or at least one annotation file before proceeding.");
       return;
     }
 
@@ -458,7 +465,9 @@ export default function ConsultationsScreen() {
     try {
       const body = new FormData();
       body.append("paper", paperFile);
-      body.append("audio", audioFile);
+      if (audioFile) {
+        body.append("audio", audioFile);
+      }
       annotationFiles.forEach((f) => body.append("annotations", f));
       await api("/consultations", { method: "POST", body, headers: {} });
       if (Platform.OS !== "web") {
@@ -478,12 +487,21 @@ export default function ConsultationsScreen() {
   };
 
   const uploadConsultation = async () => {
-    if (!paperFile || !audioFile) {
-      setError("Please select the manuscript (.docx) and the audio recording (.mp3/.wav) before proceeding.");
+    if (!paperFile) {
+      setError("Please select the manuscript (.docx) before proceeding.");
       return;
     }
-    // First check for mismatch, then upload
-    await checkMismatch();
+    if (!audioFile && annotationFiles.length === 0) {
+      setError("Please select either the audio recording (.mp3/.wav) or at least one annotation file before proceeding.");
+      return;
+    }
+    
+    // First check for mismatch (if audio file or annotations are provided), then upload
+    if (audioFile || annotationFiles.length > 0) {
+      await checkMismatch();
+    } else {
+      await doUploadConsultation();
+    }
   };
 
   const sendChat = async () => {
@@ -2131,7 +2149,7 @@ export default function ConsultationsScreen() {
               {mismatchCheck.audio_topic && mismatchCheck.paper_topic && (
                 <View className="gap-2 mt-2">
                   <View className="flex-row items-start gap-2">
-                    <Text className="text-amber-400 text-xs font-bold min-w-[70px]">Audio:</Text>
+                    <Text className="text-amber-400 text-xs font-bold min-w-[70px]">Bimbingan:</Text>
                     <Text className="text-slate-300 text-xs flex-1">{mismatchCheck.audio_topic}</Text>
                   </View>
                   <View className="flex-row items-start gap-2">
@@ -2160,7 +2178,7 @@ export default function ConsultationsScreen() {
             </View>
 
             <Text className="text-slate-400 text-xs leading-[18px]">
-              Pastikan draft yang di-upload adalah draft yang dibahas di sesi bimbingan audio ini. 
+              Pastikan draft yang di-upload adalah draft yang dibahas di sesi bimbingan ini. 
               Jika tetap melanjutkan, hasil analisis mungkin tidak akurat.
             </Text>
 

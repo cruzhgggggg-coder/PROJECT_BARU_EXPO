@@ -843,8 +843,11 @@ func callAIVision(user *models.User, systemPrompt, userPrompt, imagePath string)
 	model := ""
 	apiKey := ""
 
-	// AI Gateway Logic: Override if user has keys
-	if user != nil {
+	// AI Gateway Logic: Override if user has keys and gateway is active
+	if user != nil && user.IsGatewayActive {
+		// Decrypt keys first to ensure we have plain text values
+		decryptUserKeys(user)
+
 		if user.PreferredModel != "" && user.PreferredModel != "default" {
 			parts := strings.Split(user.PreferredModel, ":")
 			if len(parts) == 2 {
@@ -894,9 +897,9 @@ type MismatchResult struct {
 
 // DetectTopicMismatch checks if the audio transcript and draft paper are about the same topic
 // Returns a MismatchResult with details about the match
-func DetectTopicMismatch(user *models.User, transcript, paperText string) (*MismatchResult, error) {
+func DetectTopicMismatch(user *models.User, guidanceText, paperText string) (*MismatchResult, error) {
 	// Skip if either text is too short to analyze
-	if len(transcript) < 50 || len(paperText) < 50 {
+	if len(guidanceText) < 50 || len(paperText) < 50 {
 		return &MismatchResult{
 			IsMismatch: false,
 			Confidence: "low",
@@ -906,45 +909,45 @@ func DetectTopicMismatch(user *models.User, transcript, paperText string) (*Mism
 
 	// Truncate texts to avoid token limits (use first 2000 chars of each)
 	maxLen := 2000
-	if len(transcript) > maxLen {
-		transcript = transcript[:maxLen]
+	if len(guidanceText) > maxLen {
+		guidanceText = guidanceText[:maxLen]
 	}
 	if len(paperText) > maxLen {
 		paperText = paperText[:maxLen]
 	}
 
-	systemPrompt := `Kamu adalah asisten yang bertugas memvalidasi apakah rekaman bimbingan (audio) dan draft paper mahasiswa membahas topik yang sama.
+	systemPrompt := `Kamu adalah asisten yang bertugas memvalidasi apakah instruksi bimbingan dosen (baik berupa transkrip rekaman audio maupun dokumen/gambar catatan anotasi) dan draft paper mahasiswa membahas topik/bab yang sama.
 
 TUGASMU:
-1. Analisis transkrip audio dan teks paper
+1. Analisis transkrip audio/anotasi bimbingan dan teks paper
 2. Tentukan apakah keduanya membahas topik/bab yang sama
 3. Identifikasi topik utama dari masing-masing
 
 CONTOH MISMATCH:
-- Audio membahas "Bab 2: Tinjauan Pustaka" tapi paper berisi "Bab 1: Pendahuluan"
-- Audio membahas "Metodologi Penelitian" tapi paper berisi "Hasil dan Pembahasan"
-- Audio membahas tentang "algoritma sorting" tapi paper membahas tentang "machine learning"
+- Instruksi membahas "Bab 2: Tinjauan Pustaka" tapi paper berisi "Bab 1: Pendahuluan"
+- Instruksi membahas "Metodologi Penelitian" tapi paper berisi "Hasil dan Pembahasan"
+- Instruksi membahas tentang "algoritma sorting" tapi paper membahas tentang "machine learning"
 
 CONTOH MATCH:
-- Audio membahas "Bab 2: Tinjauan Pustaka" dan paper berisi "BAB 2: TINJAUAN PUSTAKA"
-- Audio membahas revisi metodologi dan paper berisi bagian metodologi
+- Instruksi membahas "Bab 2: Tinjauan Pustaka" dan paper berisi "BAB 2: TINJAUAN PUSTAKA"
+- Instruksi membahas revisi metodologi dan paper berisi bagian metodologi
 
 KAMU WAJIB mengembalikan output dalam format JSON:
 {
   "is_mismatch": true/false,
   "confidence": "high" atau "medium" atau "low",
-  "audio_topic": "topik utama dari audio",
+  "audio_topic": "topik utama dari instruksi bimbingan (audio/anotasi)",
   "paper_topic": "topik utama dari paper",
   "message": "penjelasan singkat hasil analisis"
 }`
 
-	userPrompt := fmt.Sprintf(`TRANSKRIP AUDIO:
+	userPrompt := fmt.Sprintf(`INSTRUKSI BIMBINGAN:
 "%s"
 
 TEKS PAPER:
 "%s"
 
-Analisis apakah audio dan paper membahas topik yang sama.`, transcript, paperText)
+Analisis apakah instruksi bimbingan dan paper membahas topik yang sama.`, guidanceText, paperText)
 
 	rawResponse, err := callAI(user, systemPrompt, userPrompt, true)
 	if err != nil {
@@ -999,10 +1002,16 @@ func AnalyzeAudioAndPaper(userID uint64, audioPath, paperText, prevFeedback stri
 	decryptUserKeys(&user)
 
 	// 1. Convert Audio to Text using Groq Whisper
-	transcript, err := transcribeAudio(audioPath, user.GroqKey)
-	if err != nil {
-		fmt.Printf("Warning: Transcription failed: %v\n", err)
-		transcript = "Transkripsi Audio Gagal: " + err.Error()
+	var transcript string
+	var err error
+	if audioPath != "" {
+		transcript, err = transcribeAudio(audioPath, user.GroqKey)
+		if err != nil {
+			fmt.Printf("Warning: Transcription failed: %v\n", err)
+			transcript = "Transkripsi Audio Gagal: " + err.Error()
+		}
+	} else {
+		transcript = "Tidak ada transkripsi rekaman audio untuk sesi bimbingan ini."
 	}
 
 	// 2. Analyze the Transcript and Paper with AI
