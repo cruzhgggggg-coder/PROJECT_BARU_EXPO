@@ -215,13 +215,13 @@ export default function RegisterScreen() {
             {role === "student" ? (
               <View className="gap-1" style={{ zIndex: showLecturerDropdown ? 101 : 1, elevation: showLecturerDropdown ? 101 : 1 }}>
                 <View
-                  className={isMobile ? "flex-col gap-2" : "flex-row gap-3"}
+                  className={isMobile ? "flex-col" : "flex-row gap-3"}
                   style={{
                     zIndex: showLecturerDropdown ? 102 : 1,
                     elevation: showLecturerDropdown ? 102 : 1,
                   }}
                 >
-                  <View className="flex-1">
+                  <View className={isMobile ? "w-full" : "flex-1"}>
                     <Field
                       label="Student ID (NIM)"
                       placeholder="240601..."
@@ -230,7 +230,7 @@ export default function RegisterScreen() {
                     />
                   </View>
                   <View
-                    className="flex-1 relative"
+                    className={isMobile ? "w-full relative mb-4" : "flex-1 relative mb-4"}
                     style={{
                       zIndex: showLecturerDropdown ? 999 : 1,
                       elevation: showLecturerDropdown ? 999 : 1,
@@ -323,8 +323,8 @@ export default function RegisterScreen() {
               </View>
             ) : (
               <View className="gap-1">
-                <View className={isMobile ? "flex-col gap-2" : "flex-row gap-3"}>
-                  <View className="flex-1">
+                <View className={isMobile ? "flex-col" : "flex-row gap-3"}>
+                  <View className={isMobile ? "w-full" : "flex-1"}>
                     <Field
                       label="Advisor ID Number (NIP)"
                       placeholder="198001..."
@@ -332,7 +332,7 @@ export default function RegisterScreen() {
                       onChangeText={(v) => patch("nip", v)}
                     />
                   </View>
-                  <View className="flex-1">
+                  <View className={isMobile ? "w-full" : "flex-1"}>
                     <Field
                       label="Faculty / Department"
                       placeholder="Science and Mathematics"
