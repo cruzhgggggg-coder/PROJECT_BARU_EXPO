@@ -32,20 +32,26 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
       {/* Timeline dot */}
       <View
         className="absolute left-1.5 top-6 w-3 h-3 rounded-full z-[2]"
-        style={{ backgroundColor: statusColor, shadowColor: statusColor, elevation: 4, boxShadow: Platform.OS === "web" ? "0 0 8px currentColor" : undefined } as any}
+        style={
+          Platform.OS === "web"
+            ? ({ backgroundColor: statusColor, shadowColor: statusColor, elevation: 4, boxShadow: "0 0 8px currentColor" } as any)
+            : { backgroundColor: statusColor, shadowColor: statusColor, elevation: 4 }
+        }
       />
 
       <GlassCard className={isMobile ? "p-4 gap-4" : "p-[22px] gap-4"}>
         {/* Header: session info + expand toggle */}
         <Pressable
           onPress={() => setExpanded(!expanded)}
+          accessibilityLabel={expanded ? "Collapse session details" : "Expand session details"}
+          accessibilityRole="button"
           className="flex-row justify-between items-start gap-3"
           style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
         >
           <View className="flex-1 gap-2">
             <View className="flex-row items-center gap-2.5 flex-wrap">
               <View className="bg-[rgba(99,102,241,0.08)] border border-[rgba(99,102,241,0.2)] rounded-lg px-2.5 py-1">
-                <Text className="text-[10px] font-black tracking-wider text-[#6366F1]">SESSION #{sessionNumber}</Text>
+                <Text className="text-[11px] font-black tracking-wider text-[#6366F1]">SESSION #{sessionNumber}</Text>
               </View>
               <Badge text={statusLabel} color={statusColor} />
             </View>
@@ -80,11 +86,13 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
 
         {/* Expanded content */}
         {expanded && (
-          <View className="gap-4 pt-2 border-t border-white/[0.06]">
+          <View className="gap-4 pt-2 border-t border-white/10">
             {/* Download links */}
             <View className="flex-row gap-3 flex-wrap">
               <Pressable
                 onPress={() => Linking.openURL(getFileDownloadUrl("paper", log.paper_filename, accessToken!))}
+                accessibilityLabel="Download draft document"
+                accessibilityRole="link"
                 style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
               >
                 <Text className="text-[11px] font-bold text-[#3B82F6] underline">
@@ -94,6 +102,8 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
               {log.revised_document_filename && (
                 <Pressable
                   onPress={() => Linking.openURL(getFileDownloadUrl("revised", log.revised_document_filename || "", accessToken!))}
+                  accessibilityLabel="Download revised draft"
+                  accessibilityRole="link"
                   style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                 >
                   <Text className="text-[11px] font-bold text-[#7C3AED] underline">
@@ -104,6 +114,8 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
               {log.final_document_filename && (
                 <Pressable
                   onPress={() => Linking.openURL(getFileDownloadUrl("final", log.final_document_filename || "", accessToken!))}
+                  accessibilityLabel="Download final document"
+                  accessibilityRole="link"
                   style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                 >
                   <Text className="text-[11px] font-bold text-[#059669] underline">
@@ -114,12 +126,15 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
             </View>
 
             {/* Tab switcher */}
-            <View className="flex-row gap-2 border-b border-white/[0.08] pb-2">
+            <View className="flex-row gap-2 border-b border-white/15 pb-2">
               <Pressable
                 onPress={() => setActiveTab("feedback")}
+                accessibilityLabel={`Show feedback tab, ${feedbackCount} items`}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeTab === "feedback" }}
                 className={`flex-1 py-2.5 rounded-lg items-center justify-center border border-transparent ${
                   activeTab === "feedback"
-                    ? "bg-[#6366F1] border-[rgba(99,102,241,0.1)] shadow-[0_4px_12px_rgba(99,102,241,0.15)]"
+                    ? "bg-[#6366F1] border-[rgba(99,102,241,0.1)] shadow-md"
                     : "bg-transparent"
                 }`}
               >
@@ -127,21 +142,29 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
                   Feedback ({feedbackCount})
                 </Text>
               </Pressable>
-              <Pressable
-                onPress={() => setActiveTab("transcript")}
-                className={`flex-1 py-2.5 rounded-lg items-center justify-center border border-transparent ${
-                  activeTab === "transcript"
-                    ? "bg-[#6366F1] border-[rgba(99,102,241,0.1)] shadow-[0_4px_12px_rgba(99,102,241,0.15)]"
-                    : "bg-transparent"
-                }`}
-              >
-                <Text className={`text-[11px] font-bold ${activeTab === "transcript" ? "text-white" : "text-[#94A3B8]"}`}>
-                  Transcript
-                </Text>
-              </Pressable>
+              {Platform.OS === "web" && (
+                <Pressable
+                  onPress={() => setActiveTab("transcript")}
+                  accessibilityLabel="Show transcript tab"
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: activeTab === "transcript" }}
+                  className={`flex-1 py-2.5 rounded-lg items-center justify-center border border-transparent ${
+                    activeTab === "transcript"
+                      ? "bg-[#6366F1] border-[rgba(99,102,241,0.1)] shadow-md"
+                      : "bg-transparent"
+                  }`}
+                >
+                  <Text className={`text-[11px] font-bold ${activeTab === "transcript" ? "text-white" : "text-[#94A3B8]"}`}>
+                    Transcript
+                  </Text>
+                </Pressable>
+              )}
               {annotationCount > 0 && (
                 <Pressable
                   onPress={() => setActiveTab("annotations")}
+                  accessibilityLabel={`Show annotations tab, ${annotationCount} items`}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: activeTab === "annotations" }}
                   className={`flex-1 py-2.5 rounded-lg items-center justify-center border ${
                     activeTab === "annotations"
                       ? "bg-[rgba(99,102,241,0.08)] border-[rgba(99,102,241,0.25)]"
@@ -159,10 +182,10 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
             {activeTab === "feedback" ? (
               <View>
                 {feedbackCount > 0 ? (
-                  <View className="bg-white/[0.02] p-3 rounded-xl border border-white/[0.06]">
+                  <View className="bg-white/[0.04] p-3 rounded-xl border border-white/10">
                     <View className="gap-2">
                       {log.feedback_items.map((item) => (
-                        <View key={item.id} className="gap-1.5 border-b border-white/[0.04] pb-2">
+                        <View key={item.id} className="gap-1.5 border-b border-white/10 pb-2">
                           <View className="flex-row justify-between items-center gap-2.5">
                             <View className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.status === "Validated" ? "#0F766E" : item.status === "Fixed" ? "#3B82F6" : "#D97706" }} />
                             <View className="flex-1">
@@ -180,7 +203,7 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
                           </View>
                           {item.fix_proof_text ? (
                             <View className="ml-4 bg-emerald-500/[0.04] border border-emerald-500/[0.12] rounded-lg p-2 gap-1">
-                              <Text className="text-emerald-500 text-[10px] font-black tracking-[1.5px]">FIX DESCRIPTION</Text>
+                              <Text className="text-emerald-500 text-[11px] font-black tracking-[1.5px]">FIX DESCRIPTION</Text>
                               <Text className="text-[#CBD5E1] text-[11px] font-medium" style={{ lineHeight: 16 }}>
                                 {item.fix_proof_text}
                               </Text>
@@ -198,29 +221,31 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
                 )}
               </View>
             ) : activeTab === "transcript" ? (
-                  <ScrollView
-                    nestedScrollEnabled={true}
-                    showsVerticalScrollIndicator={true}
-                    className="h-[180px] bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5 ultra-thin-scroll"
-                style={{ outlineStyle: "none" } as any}
-              >
-                <Text className="text-[13px] leading-[22px] font-medium text-[#CBD5E1]">
-                  {log.transcript_text || "Audio transcript for this session is empty or has not finished processing."}
-                </Text>
-              </ScrollView>
+              Platform.OS === "web" ? (
+                <ScrollView
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={true}
+                  className="h-[180px] bg-white/[0.04] border border-white/10 rounded-xl p-3.5"
+                  style={Platform.OS === "web" ? { outlineStyle: "none" } as any : undefined}
+                >
+                  <Text className="text-[13px] leading-[22px] font-medium text-[#CBD5E1]">
+                    {log.transcript_text || "Audio transcript for this session is empty or has not finished processing."}
+                  </Text>
+                </ScrollView>
+              ) : null
             ) : (
                 <ScrollView
                     nestedScrollEnabled={true}
                     showsVerticalScrollIndicator={true}
-                    className="max-h-[320px] ultra-thin-scroll"
+                    style={{ maxHeight: 320 }}
               >
                 <View className="gap-3">
                   {(log.revision_annotations ?? []).map((ann, idx) => (
-                    <View key={ann.id} className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-3 gap-2">
+                    <View key={ann.id} className="bg-white/[0.04] border border-white/10 rounded-xl p-3 gap-2">
                       <View className="flex-row items-center gap-2.5">
                         <View className="flex-1">
                           <Text className="text-[11px] font-bold text-[#F8FAFC]" numberOfLines={1}>{ann.filename}</Text>
-                          <Text className="text-[10px] text-[#64748B] mt-0.5">
+                          <Text className="text-[11px] text-[#64748B] mt-0.5">
                             {ann.file_type === "image" ? "Lecturer Corrected Document" : "DOCX Track Changes"}
                           </Text>
                         </View>
@@ -238,9 +263,13 @@ function TimelineItem({ log, sessionNumber }: { log: ConsultationLog; sessionNum
                           <Image source={{ uri: `${API_URL}/storage/annotations/${ann.filename}`, headers: { "Cache-Control": "max-age=3600" } }} style={{ width: "100%", height: 160, borderRadius: 8, opacity: 0.92, backgroundColor: "rgba(99,102,241,0.1)" }} resizeMode="cover" />
                         )
                       )}
-                      <View className="bg-white/[0.02] border border-white/[0.04] rounded-[10px] p-2.5 gap-1">
-                        <Text className="text-[9px] font-black tracking-[1.5px] text-[#6366F1]">EXTRACTED CONTENT</Text>
-                        <ScrollView showsVerticalScrollIndicator nestedScrollEnabled={true} className="max-h-[100px] ultra-thin-scroll">
+                      <View className="bg-white/[0.04] border border-white/10 rounded-[10px] p-2.5 gap-1">
+                        <Text className="text-[11px] font-black tracking-[1.5px] text-[#6366F1]">EXTRACTED CONTENT</Text>
+                        <ScrollView
+                          showsVerticalScrollIndicator
+                          nestedScrollEnabled={true}
+                          style={{ maxHeight: 100 }}
+                        >
                           <Text className="text-[12px] leading-5 font-normal text-[#CBD5E1]">
                             {ann.extracted_text || "(No text extracted)"}
                           </Text>
@@ -277,10 +306,13 @@ function StudentCard({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityLabel={`Select student ${student.name}, ${sessionCount} sessions`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
       className={`rounded-2xl border p-4 gap-3 transition-all ${
         isSelected
           ? "bg-indigo-500/[0.08] border-indigo-500/[0.25]"
-          : "bg-white/[0.02] border-white/[0.06]"
+          : "bg-white/[0.04] border-white/10"
       }`}
       style={({ pressed }) => ({
         transform: [{ scale: pressed ? 0.985 : 1 }],
@@ -303,18 +335,18 @@ function StudentCard({
         </View>
       </View>
 
-      <View className="flex-row justify-between bg-white/[0.02] rounded-[10px] p-2.5 border border-white/[0.04]">
+      <View className="flex-row justify-between bg-white/[0.04] rounded-[10px] p-2.5 border border-white/10">
         <View className="items-center gap-0.5">
           <Text className="text-slate-50 text-base font-black tracking-tight">{sessionCount}</Text>
-          <Text className="text-slate-400 text-[9px] font-bold uppercase tracking-[0.5px]">Sessions</Text>
+          <Text className="text-slate-400 text-[11px] font-bold uppercase tracking-[0.5px]">Sessions</Text>
         </View>
         <View className="items-center gap-0.5">
           <Text className={`text-base font-black tracking-tight ${validatedCount > 0 ? "text-emerald-500" : "text-slate-50"}`}>{validatedCount}</Text>
-          <Text className="text-slate-400 text-[9px] font-bold uppercase tracking-[0.5px]">Approved</Text>
+          <Text className="text-slate-400 text-[11px] font-bold uppercase tracking-[0.5px]">Approved</Text>
         </View>
         <View className="items-center gap-0.5">
           <Text className={`text-base font-black tracking-tight ${pendingCount > 0 ? "text-amber-500" : "text-slate-50"}`}>{pendingCount}</Text>
-          <Text className="text-slate-400 text-[9px] font-bold uppercase tracking-[0.5px]">Pending</Text>
+          <Text className="text-slate-400 text-[11px] font-bold uppercase tracking-[0.5px]">Pending</Text>
         </View>
       </View>
     </Pressable>
@@ -456,8 +488,8 @@ export default function ArchiveScreen() {
           <View className={isMobile ? "flex-col flex-1 min-h-0 gap-4" : "flex-row gap-5 items-start"}>
             {/* Left Panel: Student Roster */}
             {!isMobile ? (
-              <GlassCard className="w-[320px] min-w-[280px] p-6 shrink-0 h-[700px]">
-                <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-5">
+              <GlassCard className="w-[320px] min-w-[280px] p-6 shrink-0" style={{ height: 700, flexShrink: 0 }}>
+                <View className="flex-row items-center gap-2.5 border-b border-white/15 pb-4 mb-5">
                   <User color="#4F46E5" size={18} />
                   <Text className="text-slate-50 text-base font-black tracking-tight">Student Roster</Text>
                 </View>
@@ -466,7 +498,6 @@ export default function ArchiveScreen() {
                   nestedScrollEnabled={true}
                   showsVerticalScrollIndicator={true}
                   className="flex-1"
-                  {...({ className: "ultra-thin-scroll" } as any)}
                   contentContainerStyle={{ gap: 10 }}
                 >
                   {students.length === 0 ? (
@@ -496,9 +527,11 @@ export default function ArchiveScreen() {
                 </ScrollView>
               </GlassCard>
             ) : (
-              <GlassCard className="p-4">
+              <GlassCard className="p-4" style={{ flexShrink: 0 }}>
                 <Pressable
                   onPress={() => setMobileRosterOpen(!mobileRosterOpen)}
+                  accessibilityLabel={mobileRosterOpen ? "Close student roster" : "Open student roster"}
+                  accessibilityRole="button"
                   className="flex-row items-center justify-between"
                   style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
                 >
@@ -573,8 +606,8 @@ export default function ArchiveScreen() {
                       </View>
                     </View>
                     {selectedStudent.thesis_title && (
-                      <View className={`${isMobile ? "w-full" : "flex-1 mr-2.5"} bg-white/[0.02] p-3 rounded-xl border border-white/[0.04]`}>
-                        <Text className="text-slate-400 text-[9px] font-extrabold tracking-widest uppercase mb-0.5">THESIS TITLE</Text>
+                      <View className={`${isMobile ? "w-full" : "flex-1 mr-2.5"} bg-white/[0.04] p-3 rounded-xl border border-white/10`}>
+                        <Text className="text-slate-400 text-[11px] font-extrabold tracking-widest uppercase mb-0.5">THESIS TITLE</Text>
                         <Text className="text-slate-300 text-xs font-semibold" numberOfLines={2}>{selectedStudent.thesis_title}</Text>
                       </View>
                     )}
@@ -591,14 +624,17 @@ export default function ArchiveScreen() {
                     ? filteredLogs.filter((l) => !l.feedback_items || l.feedback_items.length === 0 || l.feedback_items.every((item) => item.status === "Validated")).length
                     : filteredLogs.filter((l) => l.feedback_items?.some((item) => item.status !== "Validated")).length;
                   const label = f === "all" ? "All Sessions" : f === "validated" ? "Approved" : "Revision Required";
-                  return (
+                   return (
                     <Pressable
                       key={f}
                       onPress={() => setFilter(f)}
+                      accessibilityLabel={`Filter by ${label}, ${count} results`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: filter === f }}
                       className={`py-3 px-4 rounded-full border transition-all ${
                         filter === f
                           ? "bg-[#6366F1] border-[#6366F1]"
-                          : "bg-white/[0.02] border-white/[0.06]"
+                          : "bg-white/[0.04] border-white/10"
                       }`}
                       style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.97 : 1 }] })}
                     >
@@ -612,7 +648,7 @@ export default function ArchiveScreen() {
 
               {/* Timeline */}
               <GlassCard className={isMobile ? "p-4" : "p-7"}>
-                <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-7">
+                <View className="flex-row items-center gap-2.5 border-b border-white/15 pb-4 mb-7">
                   <Archive color="#4F46E5" size={20} />
                   <Text className="text-xl font-black tracking-tight text-[#F8FAFC]">Consultation Timeline</Text>
                 </View>
@@ -660,10 +696,13 @@ export default function ArchiveScreen() {
                   <Pressable
                     key={f}
                     onPress={() => setFilter(f)}
+                    accessibilityLabel={`Filter by ${label}, ${count} results`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: filter === f }}
                     className={`py-3 px-4 rounded-full border ${
                       filter === f
                         ? "bg-[#6366F1] border-[#6366F1]"
-                        : "bg-white/[0.02] border-white/[0.06]"
+                        : "bg-white/[0.04] border-white/10"
                     }`}
                     style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.97 : 1 }] })}
                   >
@@ -677,7 +716,7 @@ export default function ArchiveScreen() {
 
             {/* Timeline */}
             <GlassCard className={isMobile ? "p-4" : "p-7"}>
-              <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-7">
+              <View className="flex-row items-center gap-2.5 border-b border-white/15 pb-4 mb-7">
                 <Archive color="#4F46E5" size={20} />
                 <Text className="text-xl font-black tracking-tight text-[#F8FAFC]">My Consultation History</Text>
               </View>

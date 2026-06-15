@@ -1020,6 +1020,11 @@ func CreateConsultationV2(c *gin.Context) {
 	}
 
 	log.Student = &student
+
+	if WebSocketHub != nil && student.LecturerID != 0 {
+		WebSocketHub.Broadcast("lecturer."+strconv.FormatUint(student.LecturerID, 10), "consultation.new", log)
+	}
+
 	c.JSON(http.StatusCreated, gin.H{"message": "Consultation created successfully", "data": log})
 }
 

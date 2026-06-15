@@ -9,6 +9,7 @@
     "splash": {
       "backgroundColor": "#020617"
     },
+    "userInterfaceStyle": "dark",
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -17,7 +18,15 @@
       "package": "com.tierlog.app",
       "permissions": [
         "INTERNET"
-      ]
+      ],
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tierlog.app",
+      "infoPlist": {
+        "UIViewControllerBasedStatusBarAppearance": true
+      }
     },
     "web": {
       "bundler": "metro",

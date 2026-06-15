@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useState, useRef } from "react";
-import { Text, View, Pressable, Platform } from "react-native";
+import { Text, View, Pressable, Platform, BackHandler } from "react-native";
 import { router } from "expo-router";
 import { Cpu, CheckCircle, Clock, AlertCircle, User, Archive } from "lucide-react-native";
 import { MotionDiv } from "@/src/lib/motion";
@@ -24,6 +24,13 @@ export default function DashboardScreen() {
       router.replace("/lecturer-dashboard");
     }
   }, [user?.role]);
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener("hardwareBackPress", () => {
+      return true;
+    });
+    return () => backHandler.remove();
+  }, []);
 
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [consultations, setConsultations] = useState<ConsultationLog[]>([]);
@@ -126,9 +133,11 @@ export default function DashboardScreen() {
         <Heading
           title={user?.role === "lecturer" ? "Academic Evaluation Portal" : "Academic Progress Dashboard"}
           subtitle={
-            user?.role === "lecturer" 
-              ? "Centralized oversight of student supervision logs, revision draft validation, and thesis milestone tracking."
-              : "Monitor thesis draft consultation progress, manage assigned revision tasks, and review formal advisings."
+            isMobile ? undefined : (
+              user?.role === "lecturer"
+                ? "Centralized oversight of student supervision logs, revision draft validation, and thesis milestone tracking."
+                : "Monitor thesis draft consultation progress, manage assigned revision tasks, and review formal advisings."
+            )
           }
         />
 
@@ -140,10 +149,10 @@ export default function DashboardScreen() {
         ) : null}
 
         <MotionDiv variants={staggerContainer} initial="hidden" animate="visible" className="w-full flex flex-col">
-        <View className={`${isMobile ? "flex-col" : "flex-row flex-wrap"} gap-4 w-full`}>
+        <View className={`flex-row flex-wrap gap-3 w-full`}>
           {user?.role === "student" ? (
             <>
-              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
+              <MotionDiv variants={staggerItem} className={`${isMobile ? "w-[48%]" : "flex-1 min-w-[45%]"} flex`}>
               <StatCard 
                 label={isMobile ? "Approved" : "Approved Sessions"} 
                 value={stats ? Math.max(0, stats.total_consultations - (stats.pending_feedback > 0 ? 1 : 0)) : "0"} 
@@ -151,7 +160,7 @@ export default function DashboardScreen() {
                 className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
-              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
+              <MotionDiv variants={staggerItem} className={`${isMobile ? "w-[48%]" : "flex-1 min-w-[45%]"} flex`}>
               <StatCard 
                 label={isMobile ? "Pending" : "Pending Revisions"} 
                 value={stats?.pending_feedback ?? "0"} 
@@ -159,7 +168,7 @@ export default function DashboardScreen() {
                 className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
-              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
+              <MotionDiv variants={staggerItem} className={`${isMobile ? "w-[48%]" : "flex-1 min-w-[45%]"} flex`}>
               <StatCard 
                 label="Completion Rate" 
                 value={stats ? `${stats.completion_rate}%` : "0%"} 
@@ -167,7 +176,7 @@ export default function DashboardScreen() {
                 className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
-              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
+              <MotionDiv variants={staggerItem} className={`${isMobile ? "w-[48%]" : "flex-1 min-w-[45%]"} flex`}>
               <StatCard 
                 label={isMobile ? "Total Drafts" : "Total Document Drafts"} 
                 value={stats?.draft_count ?? "0"} 
@@ -178,7 +187,7 @@ export default function DashboardScreen() {
             </>
           ) : (
             <>
-              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
+              <MotionDiv variants={staggerItem} className={`${isMobile ? "w-[48%]" : "flex-1 min-w-[45%]"} flex`}>
               <StatCard 
                 label={isMobile ? "Consultations" : "Total Consultations"} 
                 value={stats?.total_consultations ?? "0"} 
@@ -186,7 +195,7 @@ export default function DashboardScreen() {
                 className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
-              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
+              <MotionDiv variants={staggerItem} className={`${isMobile ? "w-[48%]" : "flex-1 min-w-[45%]"} flex`}>
               <StatCard 
                 label={isMobile ? "Queue" : "Validation Queue"} 
                 value={stats?.pending_feedback ?? "0"} 
@@ -194,7 +203,7 @@ export default function DashboardScreen() {
                 className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
-              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
+              <MotionDiv variants={staggerItem} className={`${isMobile ? "w-[48%]" : "flex-1 min-w-[45%]"} flex`}>
               <StatCard 
                 label={isMobile ? "Completion" : "Average Completion"} 
                 value={stats ? `${stats.completion_rate}%` : "0%"} 
@@ -202,7 +211,7 @@ export default function DashboardScreen() {
                 className={isMobile ? "p-4 min-w-0" : ""}
               />
               </MotionDiv>
-              <MotionDiv variants={staggerItem} className={`flex-1 ${isMobile ? "w-full" : "min-w-[45%]"} flex`}>
+              <MotionDiv variants={staggerItem} className={`${isMobile ? "w-[48%]" : "flex-1 min-w-[45%]"} flex`}>
               <StatCard 
                 label={isMobile ? "Students" : "Active Students"} 
                 value={stats?.student_count ?? "0"} 
@@ -217,7 +226,7 @@ export default function DashboardScreen() {
 
         {user?.role === "student" ? (
           <GlassCard className={isMobile ? "p-4" : "p-7"}>
-            <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-6">
+            <View className="flex-row items-center gap-2.5 border-b border-white/15 pb-4 mb-6">
               <Cpu color="#4F46E5" size={20} />
               <Text className="text-slate-50 text-lg font-black tracking-tight">Active Revision Tasks</Text>
             </View>
@@ -248,7 +257,7 @@ export default function DashboardScreen() {
                           ) : (
                             <Clock color="#D97706" size={16} />
                           )}
-                          <Text className={`text-[9px] font-black tracking-widest ${
+                          <Text className={`text-[11px] font-black tracking-widest ${
                             isValidated ? "text-emerald-500" : isFixed ? "text-cyan-500" : "text-amber-500"
                           }`}>
                             {isMobile 
@@ -274,7 +283,7 @@ export default function DashboardScreen() {
           </GlassCard>
         ) : (
           <GlassCard className="p-7">
-            <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-6">
+            <View className="flex-row items-center gap-2.5 border-b border-white/15 pb-4 mb-6">
               <User color="#3B82F6" size={20} />
               <Text className="text-slate-50 text-lg font-black tracking-tight">Active Supervised Students</Text>
             </View>
@@ -292,7 +301,7 @@ export default function DashboardScreen() {
                     onHoverIn={Platform.OS === "web" ? () => setHoveredCard(student.id) : undefined}
                     onHoverOut={Platform.OS === "web" ? () => setHoveredCard(null) : undefined}
                     className={`flex-1 ${isMobile ? "w-full" : "min-w-[320px] max-w-[48%]"} rounded-[20px] border border-white/[0.06] gap-3.5 p-[22px] ${
-                      isHovered ? "bg-white/[0.06] border-white/[0.12] shadow-[0_0_20px_rgba(99,102,241,0.12)]" : "bg-white/[0.03]"
+                      isHovered ? "bg-white/[0.06] border-white/[0.12] shadow-lg" : "bg-white/[0.03]"
                     }`}
                     style={({ pressed }) => ({
                       transform: [{ scale: pressed ? 0.98 : isHovered ? 1.01 : 1 }],

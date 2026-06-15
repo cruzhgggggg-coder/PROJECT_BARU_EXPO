@@ -196,6 +196,7 @@ export default function LecturerDashboardScreen() {
   const [feedbackError, setFeedbackError] = useState("");
   const [composerCategory, setComposerCategory] = useState<"Auto" | "Major" | "Minor">("Auto");
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [showMobileDispatchForm, setShowMobileDispatchForm] = useState(false);
   const [commentingOnFeedbackId, setCommentingOnFeedbackId] = useState<number | null>(null);
   const [commentText, setCommentText] = useState("");
 
@@ -926,15 +927,15 @@ export default function LecturerDashboardScreen() {
                                       day: "numeric",
                                     })}
                                   </Text>
-                                  {latestLog.transcript_text ? (
+                                  {Platform.OS === "web" && latestLog.transcript_text ? (
                                     <Text className="text-slate-300 text-xs leading-5 font-medium" numberOfLines={4}>
                                       {latestLog.transcript_text}
                                     </Text>
-                                  ) : (
+                                  ) : Platform.OS === "web" ? (
                                     <Text className="text-slate-500 text-xs italic">
                                       No transcript available for this session.
                                     </Text>
-                                  )}
+                                  ) : null}
                                   {latestLog.paper_filename ? (
                                     <View className="mt-2.5 border-t border-white/[0.06] pt-2.5 flex-row justify-between items-center">
                                       <View className="flex-1 mr-2">
@@ -1051,7 +1052,7 @@ export default function LecturerDashboardScreen() {
                                       />
                                     </View>
 
-                                    {log.transcript_text ? (
+                                    {Platform.OS === "web" && log.transcript_text ? (
                                       <Text className="text-slate-400 text-[11px] leading-[16px] font-medium" numberOfLines={2}>
                                         {log.transcript_text}
                                       </Text>
@@ -1107,32 +1108,58 @@ export default function LecturerDashboardScreen() {
                       title="Revision Items"
                     />
 
-                    {/* Dispatch Feedback Form - Fixed at Top */}
-                    <View className="bg-white/[0.02] rounded-2xl p-3.5 gap-3 border border-white/[0.06] shrink-0">
-                      <Text className="text-indigo-500 text-[9px] font-extrabold tracking-[1.5px] uppercase">DISPATCH FEEDBACK</Text>
-                      <TextInput
-                        value={feedbackText}
-                        onChangeText={setFeedbackText}
-                        placeholder="Describe the revision requirement..."
-                        placeholderTextColor="#475569"
-                        multiline
-                        numberOfLines={3}
-                        className="text-slate-50 bg-white/[0.02] border border-white/[0.06] rounded-xl p-3 text-xs font-medium leading-[18px] min-h-[60px]"
-                      />
+                    {/* Dispatch Feedback Form - Collapsible on Mobile */}
+                    <View className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-3 gap-2.5 shrink-0">
+                      <Pressable
+                        onPress={() => setShowMobileDispatchForm(!showMobileDispatchForm)}
+                        className="flex-row justify-between items-center"
+                        style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+                      >
+                        <View className="flex-row items-center gap-2">
+                          <Text className="text-indigo-500 text-[10px] font-extrabold tracking-[1.5px] uppercase">
+                            DISPATCH FEEDBACK
+                          </Text>
+                          {feedbackText.trim().length > 0 && !showMobileDispatchForm && (
+                            <View className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                          )}
+                        </View>
+                        <View className="px-2.5 py-1 rounded-lg bg-indigo-500/[0.08] border border-indigo-500/[0.15]">
+                          <Text className="text-indigo-400 text-[9px] font-bold">
+                            {showMobileDispatchForm ? "Collapse" : "Expand +"}
+                          </Text>
+                        </View>
+                      </Pressable>
 
-                      {feedbackSuccess ? (
-                        <Text className="text-emerald-500 text-xs font-bold">{feedbackSuccess}</Text>
-                      ) : null}
-                      {feedbackError ? (
-                        <Text className="text-red-600 text-xs font-bold">{feedbackError}</Text>
-                      ) : null}
+                      {showMobileDispatchForm && (
+                        <View className="gap-3 mt-2 border-t border-white/[0.04] pt-3">
+                          <TextInput
+                            value={feedbackText}
+                            onChangeText={setFeedbackText}
+                            placeholder="Describe the revision requirement..."
+                            placeholderTextColor="#475569"
+                            multiline
+                            numberOfLines={3}
+                            className="text-slate-50 bg-white/[0.02] border border-white/[0.06] rounded-xl p-3 text-xs font-medium leading-[18px] min-h-[60px]"
+                          />
 
-                      <Button
-                        title={submittingFeedback ? "Dispatching…" : "Dispatch Feedback"}
-                        disabled={submittingFeedback || !feedbackText.trim() || !latestLog}
-                        onPress={handleAddFeedback}
-                        tone="primary"
-                      />
+                          {feedbackSuccess ? (
+                            <Text className="text-emerald-500 text-xs font-bold">{feedbackSuccess}</Text>
+                          ) : null}
+                          {feedbackError ? (
+                            <Text className="text-red-600 text-xs font-bold">{feedbackError}</Text>
+                          ) : null}
+
+                          <Button
+                            title={submittingFeedback ? "Dispatching…" : "Dispatch Feedback"}
+                            disabled={submittingFeedback || !feedbackText.trim() || !latestLog}
+                            onPress={async () => {
+                              await handleAddFeedback();
+                              setShowMobileDispatchForm(false);
+                            }}
+                            tone="primary"
+                          />
+                        </View>
+                      )}
                     </View>
 
                     {/* Filter by Session - Fixed below Form */}
@@ -1700,15 +1727,15 @@ export default function LecturerDashboardScreen() {
                                       day: "numeric",
                                     })}
                                   </Text>
-                                  {latestLog.transcript_text ? (
+                                  {Platform.OS === "web" && latestLog.transcript_text ? (
                                     <Text className="text-slate-300 text-[13px] leading-5 font-medium" numberOfLines={4}>
                                       {latestLog.transcript_text}
                                     </Text>
-                                  ) : (
+                                  ) : Platform.OS === "web" ? (
                                     <Text className="text-slate-500 text-xs italic">
                                       No transcript available for this session.
                                     </Text>
-                                  )}
+                                  ) : null}
                                   {latestLog.paper_filename ? (
                                     <View className="mt-3 border-t border-white/[0.06] pt-3 flex-row justify-between items-center">
                                       <View className="flex-1 mr-2.5">
@@ -2138,7 +2165,7 @@ export default function LecturerDashboardScreen() {
                                       />
                                     </View>
 
-                                    {log.transcript_text ? (
+                                    {Platform.OS === "web" && log.transcript_text ? (
                                       <Text className="text-slate-400 text-xs leading-[18px] font-medium" numberOfLines={2}>
                                         {log.transcript_text}
                                       </Text>

@@ -34,6 +34,8 @@ export default function SettingsMenuScreen() {
               <Pressable
                 key={link.href}
                 onPress={() => router.push(link.href as any)}
+                accessibilityLabel={link.label}
+                accessibilityRole="button"
                 style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}
               >
                 <GlassCard className="p-5">
@@ -53,6 +55,8 @@ export default function SettingsMenuScreen() {
 
           <Pressable
             onPress={() => void logout()}
+            accessibilityLabel="Sign out"
+            accessibilityRole="button"
             style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}
           >
             <GlassCard className="p-5">

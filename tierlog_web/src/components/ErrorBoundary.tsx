@@ -1,6 +1,6 @@
 import React from "react";
 import { ScrollView, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { router } from "expo-router";
 
 type Props = { children: React.ReactNode };
 type State = { hasError: boolean; error: Error | null };
@@ -28,8 +28,6 @@ export class ErrorBoundary extends React.Component<Props, State> {
 }
 
 function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () => void }) {
-  const router = useRouter();
-
   return (
     <ScrollView
       contentContainerStyle={{
@@ -41,7 +39,7 @@ function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () =>
       }}
     >
       <View style={{ alignItems: "center", gap: 12, maxWidth: 400 }}>
-        <Text style={{ color: "#F8FAFC", fontSize: 20, fontWeight: "800", marginBottom: 4 }}>
+        <Text accessibilityRole="alert" style={{ color: "#F8FAFC", fontSize: 20, fontWeight: "800", marginBottom: 4 }}>
           Something went wrong
         </Text>
         <ScrollView
@@ -56,7 +54,7 @@ function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () =>
           }}
           nestedScrollEnabled
         >
-          <Text style={{ color: "#94A3B8", fontSize: 13, textAlign: "center", lineHeight: 20 }}>
+          <Text accessibilityRole="alert" style={{ color: "#94A3B8", fontSize: 13, textAlign: "center", lineHeight: 20 }}>
             {error?.message || "An unexpected error occurred."}
           </Text>
         </ScrollView>
@@ -64,6 +62,8 @@ function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () =>
         <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
           <Text
             onPress={onReset}
+            accessibilityLabel="Try again"
+            accessibilityRole="button"
             style={{
               color: "#F8FAFC",
               fontSize: 14,
@@ -78,7 +78,16 @@ function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () =>
             Try Again
           </Text>
           <Text
-            onPress={() => router.replace("/")}
+            onPress={() => {
+              try {
+                router.replace("/");
+              } catch (err) {
+                console.warn("Error fallback navigation failed:", err);
+                onReset();
+              }
+            }}
+            accessibilityLabel="Go home"
+            accessibilityRole="button"
             style={{
               color: "#F8FAFC",
               fontSize: 14,

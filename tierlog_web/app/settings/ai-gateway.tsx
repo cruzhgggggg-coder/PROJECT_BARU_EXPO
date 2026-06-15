@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform as RNPlatform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Cpu, CheckCircle, AlertCircle, Clock, Key, Radio, Settings, Zap, ChevronDown, ChevronRight } from "lucide-react-native";
 
 import { GlassCard } from "@/src/components/ui/glass-card";
@@ -76,6 +76,29 @@ const PROVIDER_INFO: Record<string, {
 
 const PROVIDER_ORDER = ["openai", "gemini", "anthropic", "nvidia", "groq"];
 
+const partitionModels = (modelsList: { label: string; value: string; desc: string }[]) => {
+  if (modelsList.length <= 5) {
+    return { primary: modelsList, secondary: [] as typeof modelsList };
+  }
+  const isVisionOrMain = (m: { label: string; value: string }) => {
+    const v = m.value.toLowerCase();
+    const l = m.label.toLowerCase();
+    return (
+      v.includes("vision") || v.includes("vila") || v.includes("neva") ||
+      v.includes("gpt-4o") || v.includes("flash") || v.includes("sonnet") ||
+      v.includes("pro") || l.includes("vision") || l.includes("vila") ||
+      l.includes("neva")
+    );
+  };
+  const visionModels = modelsList.filter(isVisionOrMain);
+  const nonVisionModels = modelsList.filter((m) => !isVisionOrMain(m));
+  const combined = [...visionModels, ...nonVisionModels];
+  return {
+    primary: combined.slice(0, 5),
+    secondary: combined.slice(5),
+  };
+};
+
 export default function AIGatewayScreen() {
   const isMobile = useIsMobile();
   const { api, user, setUser } = useAuth();
@@ -99,10 +122,16 @@ export default function AIGatewayScreen() {
   const [fetchingModels, setFetchingModels] = useState(false);
   const [fetchError, setFetchError] = useState("");
   const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
+  const [otherModelsSearch, setOtherModelsSearch] = useState("");
+  const [otherModelsPage, setOtherModelsPage] = useState(1);
 
   const toggleProvider = (provider: string) => {
     setExpandedProviders((prev) => ({ ...prev, [provider]: !prev[provider] }));
   };
+
+  useEffect(() => {
+    setOtherModelsPage(1);
+  }, [otherModelsSearch, nvidiaKey]);
 
   // Sync state when user object changes (e.g. after refresh or save)
   useEffect(() => {
@@ -361,7 +390,20 @@ export default function AIGatewayScreen() {
               const keyVal = getKeyForProvider(providerKey);
               const connected = hasKey(providerKey);
               const isProvider = providerKey !== "groq";
-              const models = isProvider ? getModelsForProvider(providerKey) : [];
+              const models = isProvider && connected ? getModelsForProvider(providerKey) : [];
+              const { primary, secondary } = partitionModels(models);
+
+              // Filter and Paginate secondary models
+              const filteredSecondary = secondary.filter((m) => {
+                const query = otherModelsSearch.toLowerCase();
+                return m.label.toLowerCase().includes(query) || m.value.toLowerCase().includes(query);
+              });
+
+              const ITEMS_PER_PAGE = 6;
+              const totalPages = Math.ceil(filteredSecondary.length / ITEMS_PER_PAGE) || 1;
+              const activePage = Math.min(otherModelsPage, totalPages);
+              const startIndex = (activePage - 1) * ITEMS_PER_PAGE;
+              const paginatedModels = filteredSecondary.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
               return (
                 <GlassCard key={providerKey} className={isMobile ? "p-4" : "p-6"}>
@@ -430,7 +472,7 @@ export default function AIGatewayScreen() {
                     />
                   </View>
 
-                  {isProvider && models.length > 0 && (
+                  {isProvider && primary.length > 0 && (
                     <View>
                       <View className="flex-row items-center gap-1.5 mb-3">
                         <Radio color="#94A3B8" size={12} />
@@ -448,14 +490,14 @@ export default function AIGatewayScreen() {
                           <Text className="text-[13px] font-semibold text-[#DC2626]">{fetchError}</Text>
                           <Pressable
                             onPress={() => void loadDynamicNvidiaModels(nvidiaKey)}
-                            className="self-start bg-white/[0.06] px-3 py-1.5 rounded-lg border border-white/[0.08]"
+                            className="self-start bg-white/[0.06] px-3 py-2.5 rounded-lg border border-white/[0.08]"
                           >
                             <Text className="text-[11px] font-bold text-[#F8FAFC]">Try Again</Text>
                           </Pressable>
                         </View>
                       ) : (
                         <View className="gap-2">
-                          {models.map((model) => {
+                          {primary.map((model) => {
                             const isSelected = preferredModel === model.value;
 
                             return (
@@ -500,42 +542,147 @@ export default function AIGatewayScreen() {
                         </View>
                       )}
 
-                      {providerKey === "nvidia" && (
-                        <View className="mt-3 border-t border-white/[0.06] pt-3">
-                          <View className="flex-row items-center gap-1.5 mb-2">
-                            <Settings color="#94A3B8" size={12} />
-                            <Text className="text-[10px] font-black tracking-[1.5px] text-[#94A3B8]">CUSTOM MODEL</Text>
+                      {secondary.length > 0 && (
+                        <View className="mt-4 gap-2">
+                          <View className="flex-row items-center justify-between flex-wrap gap-2 border-b border-white/[0.04] pb-2 mb-2">
+                            <Text className="text-[10px] font-black tracking-[1.5px] text-[#94A3B8] uppercase">
+                              OTHER MODELS ({filteredSecondary.length})
+                            </Text>
+                            <View className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-2.5 py-1 w-full sm:w-[200px]">
+                              <TextInput
+                                value={otherModelsSearch}
+                                onChangeText={setOtherModelsSearch}
+                                placeholder="Search models..."
+                                placeholderTextColor="#64748B"
+                                className="text-[11px] font-semibold text-[#F8FAFC] p-0"
+                                style={RNPlatform.OS === "web" ? ({ outlineWidth: 0 } as any) : undefined}
+                              />
+                            </View>
                           </View>
-                          {showCustomInput && getActiveModelProvider() === "nvidia" ? (
-                            <View className="gap-2">
-                              <Text className="text-[11px] font-semibold text-[#64748B]">
-                                Enter the complete model identifier string (format: provider:model_name)
+
+                          {paginatedModels.length === 0 ? (
+                            <View className="py-4 items-center">
+                              <Text className="text-[12px] font-semibold text-[#64748B]">
+                                No models found matching "{otherModelsSearch}"
                               </Text>
-                              <View className="flex-row gap-2.5 items-center">
-                                <TextInput
-                                  value={customModelInput}
-                                  onChangeText={setCustomModelInput}
-                                  placeholder="e.g. nvidia:meta/llama-3.1-8b-instruct"
-                                  placeholderTextColor="#94A3B8"
-                                  onSubmitEditing={handleCustomModelSubmit}
-                                  className="flex-1 bg-white/[0.02] border border-white/[0.06] rounded-xl text-[#F8FAFC] px-3 py-2.5 text-[13px] font-medium"
-                                  style={{ outlineStyle: "none" } as any}
-                                />
-                                <Pressable onPress={handleCustomModelSubmit} className="bg-[#4F46E5] px-4 py-2.5 rounded-xl">
-                                  <Text className="text-white font-extrabold text-[13px]">Apply</Text>
-                                </Pressable>
-                              </View>
                             </View>
                           ) : (
-                            <Pressable
-                              onPress={() => setShowCustomInput(true)}
-                              className="self-start bg-white/[0.04] border border-white/[0.06] px-3 py-1.5 rounded-lg"
-                            >
-                              <Text className="text-[11px] font-bold text-[#94A3B8]">+ Custom NVIDIA Model</Text>
-                            </Pressable>
+                            <>
+                              <View className="flex-row flex-wrap gap-2.5 mt-1">
+                                {paginatedModels.map((model) => {
+                                  const isSelected = preferredModel === model.value;
+                                  return (
+                                    <Pressable
+                                      key={model.value}
+                                      onPress={() => selectModel(model.value)}
+                                      className={`rounded-xl border p-3.5 ${
+                                        isMobile ? "w-full" : "w-[48%] min-w-[240px]"
+                                      } ${
+                                        isSelected
+                                          ? "bg-[rgba(99,102,241,0.08)] border-[#6366F1]"
+                                          : "bg-white/[0.02] border-white/[0.06]"
+                                      }`}
+                                      style={({ pressed }) => ({
+                                        transform: [{ scale: pressed ? 0.98 : 1 }],
+                                      })}
+                                    >
+                                      <View className="flex-row items-center gap-2 mb-1.5">
+                                        <View className={`h-3 w-3 rounded-full border items-center justify-center ${
+                                          isSelected
+                                            ? "border-[#6366F1] bg-[#6366F1]"
+                                            : "border-white/[0.15]"
+                                        }`}>
+                                          {isSelected && <View className="h-1 w-1 rounded-full bg-white" />}
+                                        </View>
+                                        <Text 
+                                          className={`text-[12px] font-extrabold flex-1 ${
+                                            isSelected ? "text-[#F8FAFC]" : "text-[#CBD5E1]"
+                                          }`} 
+                                          numberOfLines={1}
+                                        >
+                                          {model.label}
+                                        </Text>
+                                        {isSelected && (
+                                          <CheckCircle color="#059669" size={12} />
+                                        )}
+                                      </View>
+                                      <Text className="text-[10px] leading-4 font-medium text-[#94A3B8]" numberOfLines={2}>
+                                        {model.desc}
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
+                              </View>
+
+                              {totalPages > 1 && (
+                                <View className="flex-row items-center justify-center gap-1.5 mt-3 flex-wrap">
+                                  <Pressable
+                                    disabled={activePage === 1}
+                                    onPress={() => setOtherModelsPage(activePage - 1)}
+                                    className={`px-2.5 py-1 rounded-lg border ${
+                                      activePage === 1
+                                        ? "opacity-30 border-white/[0.04] bg-white/[0.01]"
+                                        : "border-white/[0.08] bg-white/[0.04] active:bg-white/[0.08]"
+                                    }`}
+                                  >
+                                    <Text className="text-[10px] font-bold text-[#CBD5E1]">Prev</Text>
+                                  </Pressable>
+
+                                  {Array.from({ length: totalPages }).map((_, idx) => {
+                                    const pageNum = idx + 1;
+                                    const isPageActive = pageNum === activePage;
+                                    if (
+                                      totalPages > 6 &&
+                                      pageNum !== 1 &&
+                                      pageNum !== totalPages &&
+                                      Math.abs(pageNum - activePage) > 1
+                                    ) {
+                                      if (pageNum === 2 && activePage > 3) {
+                                        return <Text key="dots-start" className="text-[#64748B] text-[10px]">...</Text>;
+                                      }
+                                      if (pageNum === totalPages - 1 && activePage < totalPages - 2) {
+                                        return <Text key="dots-end" className="text-[#64748B] text-[10px]">...</Text>;
+                                      }
+                                      return null;
+                                    }
+                                    return (
+                                      <Pressable
+                                        key={pageNum}
+                                        onPress={() => setOtherModelsPage(pageNum)}
+                                        className={`h-6 w-6 items-center justify-center rounded-lg border ${
+                                          isPageActive
+                                            ? "bg-[#6366F1] border-[#6366F1]"
+                                            : "border-white/[0.06] bg-white/[0.02]"
+                                        }`}
+                                      >
+                                        <Text className={`text-[10px] font-extrabold ${
+                                          isPageActive ? "text-white" : "text-[#CBD5E1]"
+                                        }`}>
+                                          {pageNum}
+                                        </Text>
+                                      </Pressable>
+                                    );
+                                  })}
+
+                                  <Pressable
+                                    disabled={activePage === totalPages}
+                                    onPress={() => setOtherModelsPage(activePage + 1)}
+                                    className={`px-2.5 py-1 rounded-lg border ${
+                                      activePage === totalPages
+                                        ? "opacity-30 border-white/[0.04] bg-white/[0.01]"
+                                        : "border-white/[0.08] bg-white/[0.04] active:bg-white/[0.08]"
+                                    }`}
+                                  >
+                                    <Text className="text-[10px] font-bold text-[#CBD5E1]">Next</Text>
+                                  </Pressable>
+                                </View>
+                              )}
+                            </>
                           )}
                         </View>
                       )}
+
+
                     </View>
                   )}
 
@@ -561,31 +708,7 @@ export default function AIGatewayScreen() {
             })}
           </View>
 
-          {showCustomInput && getActiveModelProvider() !== "nvidia" && (
-            <GlassCard className={isMobile ? "p-4" : "p-6"}>
-              <View className="flex-row items-center gap-2.5 mb-4">
-                <Settings color="#6366F1" size={18} />
-                <Text className="text-[14px] font-black tracking-tight text-[#F8FAFC]">Custom Model</Text>
-              </View>
-              <Text className="text-[11px] font-semibold text-[#64748B] mb-2">
-                Enter the complete model identifier string (format: provider:model_name)
-              </Text>
-              <View className="flex-row gap-2.5 items-center">
-                <TextInput
-                  value={customModelInput}
-                  onChangeText={setCustomModelInput}
-                  placeholder="e.g. openai:gpt-4o"
-                  placeholderTextColor="#94A3B8"
-                  onSubmitEditing={handleCustomModelSubmit}
-                  className="flex-1 bg-white/[0.02] border border-white/[0.06] rounded-xl text-[#F8FAFC] px-3 py-2.5 text-[13px] font-medium"
-                  style={{ outlineStyle: "none" } as any}
-                />
-                <Pressable onPress={handleCustomModelSubmit} className="bg-[#4F46E5] px-4 py-2.5 rounded-xl">
-                  <Text className="text-white font-extrabold text-[13px]">Apply</Text>
-                </Pressable>
-              </View>
-            </GlassCard>
-          )}
+
 
           <GlassCard className={isMobile ? "p-4" : "p-6"}>
             <View className="flex-row items-center gap-2.5 border-b border-white/[0.08] pb-4 mb-5">
@@ -651,9 +774,9 @@ export default function AIGatewayScreen() {
     </RequireAuth>
   );
 
-  if (Platform.OS !== "web") {
+  if (RNPlatform.OS !== "web") {
     return (
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={RNPlatform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         {content}
       </KeyboardAvoidingView>
     );

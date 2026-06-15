@@ -36,12 +36,13 @@ export function LoadingScreen() {
   }, []);
 
   return (
-    <View className="flex-1 items-center justify-center bg-[#020617]">
+    <View className="flex-1 items-center justify-center bg-[#020617]" accessibilityLabel="Loading TierLog">
       <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
         <Text className="text-4xl font-black text-white tracking-tight">TierLog</Text>
       </Animated.View>
 
       <Animated.View
+        accessibilityRole="progressbar"
         style={{
           transform: [{ scaleX: barScale }],
           marginTop: 16,

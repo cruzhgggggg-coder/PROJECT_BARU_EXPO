@@ -30,31 +30,35 @@ function MotionWebDiv({ children, className, style, ...props }: MotionProps) {
   );
 }
 
-function MotionNativeDiv({ children, style, initial, animate, transition, ...rest }: MotionProps) {
+function MotionNativeDiv({ children, style, initial, animate, transition, variants, custom, exit, ...rest }: MotionProps) {
   // On native, use a simple animated View via Moti
   const { View: MotiView } = require("moti");
   
+  // Resolve variant names to actual objects
+  const resolvedInitial = typeof initial === "string" && variants ? variants[initial] : initial;
+  const resolvedAnimate = typeof animate === "string" && variants ? variants[animate] : animate;
+
   // Map framer-motion initial/animate to Moti from/to
-  const from = initial ? {
-    opacity: initial.opacity ?? 1,
-    translateY: initial.y ?? 0,
-    translateX: initial.x ?? 0,
-    scale: initial.scale ?? 1,
-    rotate: initial.rotate ? `${initial.rotate}deg` : "0deg",
+  const from = resolvedInitial ? {
+    opacity: resolvedInitial.opacity ?? 1,
+    translateY: resolvedInitial.y ?? 0,
+    translateX: resolvedInitial.x ?? 0,
+    scale: resolvedInitial.scale ?? 1,
+    rotate: resolvedInitial.rotate ? `${resolvedInitial.rotate}deg` : "0deg",
   } : undefined;
 
-  const to = animate ? {
-    opacity: animate.opacity ?? 1,
-    translateY: animate.y ?? 0,
-    translateX: animate.x ?? 0,
-    scale: animate.scale ?? 1,
-    rotate: animate.rotate ? `${animate.rotate}deg` : "0deg",
+  const to = resolvedAnimate ? {
+    opacity: resolvedAnimate.opacity ?? 1,
+    translateY: resolvedAnimate.y ?? 0,
+    translateX: resolvedAnimate.x ?? 0,
+    scale: resolvedAnimate.scale ?? 1,
+    rotate: resolvedAnimate.rotate ? `${resolvedAnimate.rotate}deg` : "0deg",
   } : undefined;
 
   const motiTransition = transition ? {
     type: transition.type === "spring" ? "spring" : "timing",
     duration: transition.duration ? transition.duration * 1000 : 300,
-    delay: transition.delay ? transition.delay * 1000 : 0,
+    delay: (transition.delay ?? 0) + ((custom ?? 0) * 150),
   } : undefined;
 
   return (
@@ -80,27 +84,30 @@ function MotionWebSpan({ children, className, style, ...props }: MotionProps) {
   );
 }
 
-function MotionNativeSpan({ children, style, initial, animate, transition, ...rest }: MotionProps) {
+function MotionNativeSpan({ children, style, initial, animate, transition, variants, custom, ...rest }: MotionProps) {
   const { Text: MotiText } = require("moti");
 
-  const from = initial ? {
-    opacity: initial.opacity ?? 1,
-    translateY: initial.y ?? 0,
-    translateX: initial.x ?? 0,
-    scale: initial.scale ?? 1,
+  const resolvedInitial = typeof initial === "string" && variants ? variants[initial] : initial;
+  const resolvedAnimate = typeof animate === "string" && variants ? variants[animate] : animate;
+
+  const from = resolvedInitial ? {
+    opacity: resolvedInitial.opacity ?? 1,
+    translateY: resolvedInitial.y ?? 0,
+    translateX: resolvedInitial.x ?? 0,
+    scale: resolvedInitial.scale ?? 1,
   } : undefined;
 
-  const to = animate ? {
-    opacity: animate.opacity ?? 1,
-    translateY: animate.y ?? 0,
-    translateX: animate.x ?? 0,
-    scale: animate.scale ?? 1,
+  const to = resolvedAnimate ? {
+    opacity: resolvedAnimate.opacity ?? 1,
+    translateY: resolvedAnimate.y ?? 0,
+    translateX: resolvedAnimate.x ?? 0,
+    scale: resolvedAnimate.scale ?? 1,
   } : undefined;
 
   const motiTransition = transition ? {
     type: transition.type === "spring" ? "spring" : "timing",
     duration: transition.duration ? transition.duration * 1000 : 300,
-    delay: transition.delay ? transition.delay * 1000 : 0,
+    delay: (transition.delay ?? 0) + ((custom ?? 0) * 150),
   } : undefined;
 
   return (

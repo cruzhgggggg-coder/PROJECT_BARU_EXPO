@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { KeyboardAvoidingView, Platform, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform as RNPlatform, Text, TextInput, View } from "react-native";
 import { User, CheckCircle, AlertCircle, Cpu } from "lucide-react-native";
 
 import { GlassCard } from "@/src/components/ui/glass-card";
@@ -25,8 +25,10 @@ export default function ProfileScreen() {
   const [aiConstraints, setAiConstraints] = useState(user?.lecturer?.ai_constraints ?? "");
   const [message, setMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const save = async () => {
+    setSaving(true);
     try {
       const response = await api<{ user: UserType; message: string }>("/settings/profile", {
         method: "PATCH",
@@ -49,6 +51,8 @@ export default function ProfileScreen() {
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to save profile");
       setIsSuccess(false);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -141,7 +145,7 @@ export default function ProfileScreen() {
                     multiline
                     numberOfLines={4}
                     className={`text-slate-50 bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5 text-[13px] font-medium leading-[22px] ${isMobile ? "min-h-[80px]" : "min-h-[100px]"}`}
-                    style={{ textAlignVertical: "top", outlineStyle: "none" } as any}
+                    style={RNPlatform.OS === "web" ? ({ textAlignVertical: "top", outlineStyle: "none" } as any) : { textAlignVertical: "top" }}
                   />
                 </View>
                 </>
@@ -164,7 +168,7 @@ export default function ProfileScreen() {
                 </View>
               ) : null}
 
-              <Button title="Save Changes" onPress={() => void save()} />
+              <Button title={saving ? "Saving..." : "Save Changes"} onPress={() => void save()} disabled={saving} />
             </View>
           </GlassCard>
         </View>
@@ -172,9 +176,9 @@ export default function ProfileScreen() {
     </RequireAuth>
   );
 
-  if (Platform.OS !== "web") {
+  if (RNPlatform.OS !== "web") {
     return (
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={RNPlatform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         {content}
       </KeyboardAvoidingView>
     );

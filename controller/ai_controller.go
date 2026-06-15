@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"testing_go/koneksi"
+	"testing_go/middleware"
 	"testing_go/models"
 
 	"github.com/gin-gonic/gin"
@@ -993,6 +994,92 @@ type FeedbackResponse struct {
 	Category string `json:"category"`
 }
 
+func parseMarkdownFallback(text string) []FeedbackResponse {
+	var feedbacks []FeedbackResponse
+	lines := strings.Split(text, "\n")
+	currentCategory := "HOC"
+
+	var currentContent strings.Builder
+
+	flushCurrent := func() {
+		content := strings.TrimSpace(currentContent.String())
+		if content != "" {
+			feedbacks = append(feedbacks, FeedbackResponse{
+				Content:  content,
+				Category: currentCategory,
+			})
+			currentContent.Reset()
+		}
+	}
+
+	inItem := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+
+		lower := strings.ToLower(trimmed)
+		if strings.Contains(lower, "hoc") || strings.Contains(lower, "higher order") || strings.Contains(lower, "major") {
+			flushCurrent()
+			currentCategory = "HOC"
+			inItem = false
+			continue
+		}
+		if strings.Contains(lower, "loc") || strings.Contains(lower, "lower order") || strings.Contains(lower, "minor") {
+			flushCurrent()
+			currentCategory = "LOC"
+			inItem = false
+			continue
+		}
+		if strings.Contains(lower, "daftar tugas") || strings.Contains(lower, "revisi list") || strings.Contains(lower, "todo") || strings.Contains(lower, "daftar revisi") {
+			flushCurrent()
+			break
+		}
+
+		isNewItem := false
+		if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") {
+			if !strings.HasPrefix(lower, "* revisi") && !strings.HasPrefix(lower, "- revisi") {
+				isNewItem = true
+			}
+		} else {
+			firstDot := strings.Index(trimmed, ".")
+			if firstDot > 0 && firstDot < 4 {
+				numPart := trimmed[:firstDot]
+				isNum := true
+				for _, r := range numPart {
+					if r < '0' || r > '9' {
+						isNum = false
+						break
+					}
+				}
+				if isNum && firstDot+1 < len(trimmed) && trimmed[firstDot+1] == ' ' {
+					isNewItem = true
+				}
+			}
+		}
+
+		if isNewItem {
+			flushCurrent()
+			inItem = true
+			parts := strings.SplitN(trimmed, " ", 2)
+			if len(parts) == 2 {
+				currentContent.WriteString(parts[1])
+			} else {
+				currentContent.WriteString(trimmed)
+			}
+		} else if inItem {
+			if currentContent.Len() > 0 {
+				currentContent.WriteString("\n")
+			}
+			currentContent.WriteString(trimmed)
+		}
+	}
+
+	flushCurrent()
+	return feedbacks
+}
+
 func AnalyzeAudioAndPaper(userID uint64, audioPath, paperText, prevFeedback string) ([]models.FeedbackItem, string, error) {
 	// Fetch user for AI Gateway settings
 	var user models.User
@@ -1060,6 +1147,14 @@ func AnalyzeAudioAndPaper(userID uint64, audioPath, paperText, prevFeedback stri
 				goto PROCESS
 			}
 		}
+
+		// Fallback to robust Markdown parsing!
+		fallbackFeedbacks := parseMarkdownFallback(cleanJSON)
+		if len(fallbackFeedbacks) > 0 {
+			aiResponse.Feedbacks = fallbackFeedbacks
+			goto PROCESS
+		}
+
 		return nil, transcript, fmt.Errorf("failed to parse AI response: %w. Raw: %s", err, rawResponse)
 	}
 
@@ -1169,6 +1264,16 @@ func GetAIModels(c *gin.Context) {
 		return
 	}
 
+	if apiKey == "••••••••••••••••" {
+		currentUser := middleware.CurrentUser(c)
+		if currentUser == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User context not found"})
+			return
+		}
+		decryptUserKeys(currentUser)
+		apiKey = currentUser.NvidiaKey
+	}
+
 	req, _ := http.NewRequest("GET", "https://integrate.api.nvidia.com/v1/models", nil)
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
@@ -1199,9 +1304,7 @@ func GetAIModels(c *gin.Context) {
 
 	var allModels []string
 	for _, m := range response.Data {
-		if visionCapableNVIDIAModels[m.ID] {
-			allModels = append(allModels, m.ID)
-		}
+		allModels = append(allModels, m.ID)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"models": allModels})

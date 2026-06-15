@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { KeyboardAvoidingView, Platform, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform as RNPlatform, Text, View } from "react-native";
 import { Lock, CheckCircle, AlertCircle } from "lucide-react-native";
 
 import { GlassCard } from "@/src/components/ui/glass-card";
@@ -16,6 +16,7 @@ export default function SecurityScreen() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const save = async () => {
     if (!currentPassword || !password) {
@@ -23,6 +24,7 @@ export default function SecurityScreen() {
       setIsSuccess(false);
       return;
     }
+    setSaving(true);
     try {
       const response = await api<{ message: string }>("/settings/password", {
         method: "PUT",
@@ -35,6 +37,8 @@ export default function SecurityScreen() {
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to update password");
       setIsSuccess(false);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -82,6 +86,8 @@ export default function SecurityScreen() {
                   value={currentPassword}
                   onChangeText={setCurrentPassword}
                   secureTextEntry
+                  autoComplete="current-password"
+                  returnKeyType="next"
                 />
                 <Field
                   label="New Password"
@@ -89,6 +95,9 @@ export default function SecurityScreen() {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry
+                  autoComplete="new-password"
+                  returnKeyType="done"
+                  onSubmitEditing={() => void save()}
                 />
 
                 {message ? (
@@ -108,7 +117,7 @@ export default function SecurityScreen() {
                   </View>
                 ) : null}
 
-                <Button title="Update Password" onPress={() => void save()} />
+                <Button title={saving ? "Updating..." : "Update Password"} onPress={() => void save()} disabled={saving} />
               </View>
             </GlassCard>
           </View>
@@ -117,9 +126,9 @@ export default function SecurityScreen() {
     </RequireAuth>
   );
 
-  if (Platform.OS !== "web") {
+  if (RNPlatform.OS !== "web") {
     return (
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={RNPlatform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         {content}
       </KeyboardAvoidingView>
     );

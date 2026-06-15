@@ -19,6 +19,9 @@ import {
   Clock,
   AlertCircle,
   ChevronRight,
+  Bell,
+  MessageSquare,
+  AlertTriangle,
 } from "lucide-react-native";
 
 if (Platform.OS !== "web") {
@@ -735,9 +738,11 @@ export default function ConsultationsScreen() {
           <Heading
             title="Consultation Workspace"
             subtitle={
-              user?.role === "lecturer"
-                ? "Supervisor Workspace - Auditing draft thesis, evaluating audio transcripts, and verifying revision status."
-                : "Student Workspace - Upload manuscripts, evaluate advisor feedback, and consult the AI Oracle for revision guidelines."
+              !isMobile
+                ? (user?.role === "lecturer"
+                  ? "Supervisor Workspace - Auditing draft thesis, evaluating audio transcripts, and verifying revision status."
+                  : "Student Workspace - Upload manuscripts, evaluate advisor feedback, and consult the AI Oracle for revision guidelines.")
+                : undefined
             }
           />
 
@@ -772,7 +777,7 @@ export default function ConsultationsScreen() {
                     <Pressable
                       key={tab}
                       onPress={() => setMobileStudentPanel(tab)}
-                      className="flex-1 py-2.5 rounded-lg items-center"
+                      className="flex-1 py-2 rounded-lg items-center"
                       style={{
                         backgroundColor: mobileStudentPanel === tab ? "rgba(99, 102, 241, 0.08)" : "transparent",
                         borderWidth: 1,
@@ -801,7 +806,6 @@ export default function ConsultationsScreen() {
                     showsVerticalScrollIndicator={true}
                     scrollEnabled={!isMobile}
                     className={!isMobile ? "flex-1" : "w-full"}
-                    {...({ className: "ultra-thin-scroll" } as any)}
                     contentContainerStyle={{ gap: 10, paddingBottom: 10 }}
                   >
                     <WebFileInput label="Select Manuscript (.docx)" accept=".docx" onFileSelect={setPaperFile} />
@@ -955,12 +959,11 @@ export default function ConsultationsScreen() {
                   {showArchiveDropdown && (
                     <GlassCard
                       className={!isMobile ? "absolute bottom-14 left-0 right-0 max-h-[220px] p-2.5 z-[99999] bg-slate-900/[0.95] border-white/[0.06]" : "absolute bottom-16 left-0 right-0 max-h-[220px] p-2.5 z-[99999] bg-slate-900/[0.95] border-white/[0.06]"}
-                      style={!isMobile ? { boxShadow: "0 10px 15px rgba(0,0,0,0.1)" } : { shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 15 }}
+                      style={Platform.OS === "web" && !isMobile ? { boxShadow: "0 10px 15px rgba(0,0,0,0.1)" } : { shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 15 }}
                     >
                       <ScrollView
                         nestedScrollEnabled={true}
                         showsVerticalScrollIndicator={true}
-                        {...({ className: "ultra-thin-scroll" } as any)}
                         contentContainerStyle={{ gap: 8 }}
                       >
                         {logs.map((log) => {
@@ -1040,17 +1043,19 @@ export default function ConsultationsScreen() {
                       >
                         <Text className="text-[10px] font-extrabold text-center" style={{ color: studentTab === "feedback" ? "#6366F1" : "#94A3B8" }}>{!isMobile ? "FEEDBACK" : "FB"}</Text>
                       </Pressable>
-                      <Pressable
-                        onPress={() => setStudentTab("transcript")}
-                        className="flex-1 py-2.5 rounded-lg items-center justify-center"
-                        style={{
-                          backgroundColor: studentTab === "transcript" ? "rgba(99, 102, 241, 0.08)" : "transparent",
-                          borderWidth: 1,
-                          borderColor: studentTab === "transcript" ? "rgba(99, 102, 241, 0.15)" : "transparent",
-                        }}
-                      >
-                        <Text className="text-[10px] font-extrabold text-center" style={{ color: studentTab === "transcript" ? "#6366F1" : "#94A3B8" }}>{!isMobile ? "TRANSCRIPT" : "TRANS"}</Text>
-                      </Pressable>
+                      {Platform.OS === "web" && (
+                        <Pressable
+                          onPress={() => setStudentTab("transcript")}
+                          className="flex-1 py-2.5 rounded-lg items-center justify-center"
+                          style={{
+                            backgroundColor: studentTab === "transcript" ? "rgba(99, 102, 241, 0.08)" : "transparent",
+                            borderWidth: 1,
+                            borderColor: studentTab === "transcript" ? "rgba(99, 102, 241, 0.15)" : "transparent",
+                          }}
+                        >
+                          <Text className="text-[10px] font-extrabold text-center" style={{ color: studentTab === "transcript" ? "#6366F1" : "#94A3B8" }}>{!isMobile ? "TRANSCRIPT" : "TRANS"}</Text>
+                        </Pressable>
+                      )}
                       <Pressable
                         onPress={() => setStudentTab("annotations")}
                         className="flex-1 py-2.5 rounded-lg items-center justify-center"
@@ -1088,7 +1093,6 @@ export default function ConsultationsScreen() {
                         showsVerticalScrollIndicator={true}
                         scrollEnabled={!isMobile}
                         className={!isMobile ? "flex-1" : "w-full"}
-                        {...({ className: "ultra-thin-scroll" } as any)}
                         contentContainerStyle={{ gap: 12, paddingBottom: 16 }}
                       >
                         {selected.feedback_items && selected.feedback_items.length > 0 && (
@@ -1100,7 +1104,6 @@ export default function ConsultationsScreen() {
                               gap: 10,
                               transform: [{ scale: pressed ? 0.985 : 1 }],
                              ...(Platform.OS === "web" ? { boxShadow: `0 0 12px ${classifying ? "#7C3AED" : "#0891B2"}14` } : { shadowColor: classifying ? "#7C3AED" : "#0891B2", shadowOpacity: 0.08, shadowRadius: 12 }),
-                            ...(!isMobile ? { boxShadow: `0 0 12px ${classifying ? "#7C3AED" : "#0891B2"}14` } : { shadowColor: classifying ? "#7C3AED" : "#0891B2", shadowOpacity: 0.08, shadowRadius: 12 }),
                             })}
                           >
                             <Cpu color={classifying ? "#7C3AED" : "#0891B2"} size={16} />
@@ -1257,7 +1260,7 @@ export default function ConsultationsScreen() {
                                   })}
                                 >
                                   <Text className="text-[11px] font-bold text-cyan-500">
-                                    💬 Comments {commentsCount > 0 ? `(${commentsCount})` : ""}
+                                    ðŸ’¬ Comments {commentsCount > 0 ? `(${commentsCount})` : ""}
                                   </Text>
                                   <Text className="text-[9px] text-cyan-600 font-bold">
                                     {isCommentsExpanded ? "\u25B2" : "\u25BC"}
@@ -1313,7 +1316,7 @@ export default function ConsultationsScreen() {
                                         placeholderTextColor="#64748B"
                                         multiline
                                         className="bg-slate-950/80 border border-white/[0.08] rounded-lg text-slate-50 p-2.5 text-[12px] font-medium min-h-[60px]"
-                                        style={{ outlineStyle: "none", textAlignVertical: "top" } as any}
+                                        style={Platform.OS === "web" ? ({ outlineStyle: "none", textAlignVertical: "top" } as any) : { textAlignVertical: "top" }}
                                       />
                                       <View className="flex-row justify-end gap-2">
                                         <Pressable
@@ -1350,19 +1353,20 @@ export default function ConsultationsScreen() {
                       </ScrollView>
                     ) : studentTab === "transcript" ? (
                       /* TRANSCRIPT VIEW */
-                      <View className="flex-1">
-                        <ScrollView
-                          nestedScrollEnabled={true}
-                          showsVerticalScrollIndicator={true}
-                          scrollEnabled={!isMobile}
-                          className={!isMobile ? "flex-1 bg-slate-900/[0.4] rounded-[14px] border border-white/[0.04] p-3.5" : "w-full bg-slate-900/[0.4] rounded-[14px] border border-white/[0.04] p-3.5"}
-                          {...({ className: "ultra-thin-scroll" } as any)}
-                        >
-                          <Text className="text-slate-300 text-[13px] font-medium" style={{ lineHeight: 22 }}>
-                            {selected.transcript_text ? selected.transcript_text : "No audio transcript is available for this guidance session."}
-                          </Text>
-                        </ScrollView>
-                      </View>
+                      Platform.OS === "web" ? (
+                        <View className="flex-1">
+                          <ScrollView
+                            nestedScrollEnabled={true}
+                            showsVerticalScrollIndicator={true}
+                            className={!isMobile ? "flex-1 bg-slate-900/[0.4] rounded-[14px] border border-white/[0.04] p-3.5" : "w-full bg-slate-900/[0.4] rounded-[14px] border border-white/[0.04] p-3.5"}
+                            style={Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : { maxHeight: 300 }}
+                          >
+                            <Text className="text-slate-300 text-[13px] font-medium" style={{ lineHeight: 22 }}>
+                              {selected.transcript_text ? selected.transcript_text : "No audio transcript is available for this guidance session."}
+                            </Text>
+                          </ScrollView>
+                        </View>
+                      ) : null
                     ) : studentTab === "annotations" ? (
                       /* ANNOTATIONS VIEW */
                       <View className="flex-1">
@@ -1371,14 +1375,13 @@ export default function ConsultationsScreen() {
                           showsVerticalScrollIndicator={true}
                           scrollEnabled={!isMobile}
                           className={!isMobile ? "flex-1" : "w-full"}
-                          {...({ className: "ultra-thin-scroll" } as any)}
                           contentContainerStyle={{ gap: 12 }}
                         >
                           {(selected.revision_annotations ?? []).map((ann, idx) => (
                             <View key={ann.id} className="bg-white/[0.03] border border-white/[0.08] rounded-2xl p-3.5 gap-2 border-b-0 mb-3">
                               <View className="flex-row items-center gap-2.5">
                                 <Text className="text-[22px]">
-                                  {ann.file_type === "image" ? "📸" : "📄"}
+                                  {ann.file_type === "image" ? "ðŸ“¸" : "ðŸ“„"}
                                 </Text>
                                 <View className="flex-1">
                                   <Text className="text-slate-50 text-xs font-bold" numberOfLines={1}>
@@ -1418,7 +1421,6 @@ export default function ConsultationsScreen() {
                                   nestedScrollEnabled={true}
                                   showsVerticalScrollIndicator
                                   style={{ maxHeight: 120 }}
-                                  {...({ className: "ultra-thin-scroll" } as any)}
                                 >
                                   <Text className="text-slate-300 text-[12.5px] font-normal" style={{ lineHeight: 20 }}>
                                     {ann.extracted_text || "(No text extracted yet)"}
@@ -1442,7 +1444,6 @@ export default function ConsultationsScreen() {
                           showsVerticalScrollIndicator={true}
                           scrollEnabled={!isMobile}
                           className={!isMobile ? "flex-1" : "w-full"}
-                          {...({ className: "ultra-thin-scroll" } as any)}
                           contentContainerStyle={{ gap: 12 }}
                         >
                           {logs.map((log) => {
@@ -1461,7 +1462,7 @@ export default function ConsultationsScreen() {
                                 style={isSelected ? { borderColor: "rgba(8, 145, 178, 0.3)", backgroundColor: "rgba(8, 145, 178, 0.04)" } : {}}
                               >
                                 <View className="flex-row items-center gap-2.5">
-                                  <Text className="text-[22px]">📄</Text>
+                                  <Text className="text-[22px]">ðŸ“„</Text>
                                   <View className="flex-1">
                                     <Text className="text-slate-50 text-[13px] font-bold" numberOfLines={1}>
                                       {log.paper_filename}
@@ -1586,14 +1587,13 @@ export default function ConsultationsScreen() {
                         nestedScrollEnabled={true}
                         showsVerticalScrollIndicator={true}
                         className={!isMobile ? "h-[420px] bg-slate-900/[0.4] border border-white/[0.04] rounded-[14px] p-3" : "flex-1 bg-slate-900/[0.4] border border-white/[0.04] rounded-[14px] p-3"}
-                        {...({ className: "ultra-thin-scroll" } as any)}
                         contentContainerStyle={{ gap: 10, paddingBottom: 8 }}
                       >
                         {chatMode === "oracle" ? (
                           <>
                             {chatHistory.map((message, index) => {
                               const isUser = message.role === "user";
-                              const isError = !isUser && message.content.startsWith("⚠️");
+                              const isError = !isUser && message.content.startsWith("âš ï¸");
                               return (
                                 <View
                                   key={`oracle-${index}`}
@@ -1689,7 +1689,7 @@ export default function ConsultationsScreen() {
                             chatLoading
                               ? "AI Oracle is processing response..."
                               : chatMode === "oracle" && !hasLlmKey
-                              ? "LLM API key required — set in Settings → AI Gateway"
+                              ? "LLM API key required â€” set in Settings â†’ AI Gateway"
                               : chatMode === "oracle"
                               ? "Ask about draft thesis revisions..."
                               : "Send a direct message to your advisor..."
@@ -1697,7 +1697,7 @@ export default function ConsultationsScreen() {
                           placeholderTextColor="#94A3B8"
                           onSubmitEditing={() => void sendChat()}
                           className="flex-1 bg-slate-900/[0.6] border border-white/[0.08] rounded-xl text-slate-50 px-3.5 py-3 text-[13px] font-medium"
-                          style={{ outlineStyle: "none" as any, opacity: chatLoading || (chatMode === "oracle" && !hasLlmKey) ? 0.6 : 1 }}
+                          style={Platform.OS === "web" ? ({ outlineStyle: "none" as any, opacity: chatLoading || (chatMode === "oracle" && !hasLlmKey) ? 0.6 : 1 }) : { opacity: chatLoading || (chatMode === "oracle" && !hasLlmKey) ? 0.6 : 1 }}
                         />
                         <Pressable
                           onPress={() => void sendChat()}
@@ -1758,7 +1758,6 @@ export default function ConsultationsScreen() {
                   showsVerticalScrollIndicator={true}
                   scrollEnabled={!isMobile}
                   className={!isMobile ? "flex-1" : "w-full"}
-                  {...({ className: "ultra-thin-scroll" } as any)}
                   contentContainerStyle={{ gap: 10 }}
                 >
                   {logs.map((log) => {
@@ -1779,7 +1778,7 @@ export default function ConsultationsScreen() {
                             borderColor: isSelected ? "#6366F1" : "rgba(255, 255, 255, 0.04)",
                             transform: [{ scale: pressed ? 0.98 : 1 }],
                           },
-                          isSelected ? (!isMobile ? { boxShadow: "0 0 15px rgba(99, 102, 241, 0.15)" } : { shadowColor: "#6366F1", shadowOpacity: 0.15, shadowRadius: 15 }) : {},
+                          isSelected ? (Platform.OS === "web" && !isMobile ? { boxShadow: "0 0 15px rgba(99, 102, 241, 0.15)" } : { shadowColor: "#6366F1", shadowOpacity: 0.15, shadowRadius: 15 }) : {},
                         ]}
                       >
                         <View className="flex-row justify-between items-center">
@@ -1838,7 +1837,7 @@ export default function ConsultationsScreen() {
                           className="bg-indigo-500 rounded-xl py-2.5 px-4 items-center justify-center border border-transparent"
                           style={({ pressed }) => ({
                             transform: [{ scale: pressed ? 0.94 : 1 }],
-                            ...(!isMobile ? { boxShadow: `0 0 12px ${isPlaying ? "#059669" : "#4F46E5"}14` } : { shadowColor: isPlaying ? "#059669" : "#4F46E5", shadowOpacity: 0.08, shadowRadius: 12 }),
+                            ...(Platform.OS === "web" && !isMobile ? { boxShadow: `0 0 12px ${isPlaying ? "#059669" : "#4F46E5"}14` } : { shadowColor: isPlaying ? "#059669" : "#4F46E5", shadowOpacity: 0.08, shadowRadius: 12 }),
                           })}
                         >
                           <Text className="text-white font-black text-[13px]">
@@ -1869,17 +1868,24 @@ export default function ConsultationsScreen() {
                         <Badge text="STT ENGINE ACTIVE" color="#0891B2" />
                       </View>
 
-                      <ScrollView
-                        nestedScrollEnabled={true}
-                        showsVerticalScrollIndicator={true}
-                        className="h-[120px] bg-white/[0.02] border border-white/[0.06] rounded-xl p-3"
-                        {...({ className: "ultra-thin-scroll" } as any)}
-                        style={{ outlineStyle: "none" as any }}
-                      >
-                        <Text className="text-slate-300 text-[13px] font-medium" style={{ lineHeight: 20 }}>
-                          {selected.transcript_text ? selected.transcript_text : "Transcript empty."}
-                        </Text>
-                      </ScrollView>
+                      {Platform.OS === "web" ? (
+                        <ScrollView
+                          nestedScrollEnabled={true}
+                          showsVerticalScrollIndicator={true}
+                          className="h-[120px] bg-white/[0.02] border border-white/[0.06] rounded-xl p-3"
+                          style={Platform.OS === "web" ? { outlineStyle: "none" as any } : undefined}
+                        >
+                          <Text className="text-slate-300 text-[13px] font-medium" style={{ lineHeight: 20 }}>
+                            {selected.transcript_text ? selected.transcript_text : "Transcript empty."}
+                          </Text>
+                        </ScrollView>
+                      ) : (
+                        <View className="h-[120px] items-center justify-center bg-white/[0.02] border border-dashed border-white/[0.1] rounded-xl p-3">
+                          <Text className="text-slate-400 text-xs font-semibold text-center leading-[18px]">
+                            Transcript text is only available on desktop web version.
+                          </Text>
+                        </View>
+                      )}
 
                       <View className="flex-row gap-3 mt-3">
                         <View className="flex-1">
@@ -1928,7 +1934,6 @@ export default function ConsultationsScreen() {
                         showsVerticalScrollIndicator={true}
                         scrollEnabled={!isMobile}
                         className={!isMobile ? "flex-1" : "w-full"}
-                        {...({ className: "ultra-thin-scroll" } as any)}
                         contentContainerStyle={{ gap: 8 }}
                       >
                         {selected.feedback_items?.map((item) => {
@@ -1972,7 +1977,7 @@ export default function ConsultationsScreen() {
                             className="bg-slate-900/[0.6] border border-white/[0.08] rounded-xl text-slate-50 p-3 text-[13px] font-medium"
                             placeholder="Audit selected feedback item..."
                             placeholderTextColor="#475569"
-                            style={{ textAlignVertical: "top", outlineStyle: "none" as any }}
+                            style={Platform.OS === "web" ? ({ textAlignVertical: "top", outlineStyle: "none" as any }) : { textAlignVertical: "top" }}
                           />
                         </View>
 
@@ -1985,7 +1990,7 @@ export default function ConsultationsScreen() {
                               style={{
                                 backgroundColor: feedbackCategory === "Major" ? "rgba(220, 38, 38, 0.06)" : "rgba(255, 255, 255, 0.02)",
                                 borderColor: feedbackCategory === "Major" ? "#DC2626" : "rgba(255, 255, 255, 0.04)",
-                                ...(!isMobile ? { boxShadow: feedbackCategory === "Major" ? "0 0 10px rgba(220, 38, 38, 0.1)" : "none" } : { shadowColor: "#DC2626", shadowOpacity: feedbackCategory === "Major" ? 0.1 : 0, shadowRadius: 10 }),
+                                ...(Platform.OS === "web" && !isMobile ? { boxShadow: feedbackCategory === "Major" ? "0 0 10px rgba(220, 38, 38, 0.1)" : "none" } : { shadowColor: "#DC2626", shadowOpacity: feedbackCategory === "Major" ? 0.1 : 0, shadowRadius: 10 }),
                               }}
                             >
                               <Text className="text-[11px] font-black tracking-[1px]" style={{ color: feedbackCategory === "Major" ? "#DC2626" : "#475569" }}>MAJOR</Text>
@@ -1996,7 +2001,7 @@ export default function ConsultationsScreen() {
                               style={{
                                 backgroundColor: feedbackCategory === "Minor" ? "rgba(99, 102, 241, 0.06)" : "rgba(255, 255, 255, 0.02)",
                                 borderColor: feedbackCategory === "Minor" ? "#6366F1" : "rgba(255, 255, 255, 0.04)",
-                                ...(!isMobile ? { boxShadow: feedbackCategory === "Minor" ? "0 0 10px rgba(99, 102, 241, 0.1)" : "none" } : { shadowColor: "#6366F1", shadowOpacity: feedbackCategory === "Minor" ? 0.1 : 0, shadowRadius: 10 }),
+                                ...(Platform.OS === "web" && !isMobile ? { boxShadow: feedbackCategory === "Minor" ? "0 0 10px rgba(99, 102, 241, 0.1)" : "none" } : { shadowColor: "#6366F1", shadowOpacity: feedbackCategory === "Minor" ? 0.1 : 0, shadowRadius: 10 }),
                               }}
                             >
                               <Text className="text-[11px] font-black tracking-[1px]" style={{ color: feedbackCategory === "Minor" ? "#4F46E5" : "#475569" }}>MINOR</Text>
@@ -2092,13 +2097,13 @@ export default function ConsultationsScreen() {
             });
             const opacityAnim = toastAnimRef;
 
-            let icon = "🔔";
+            let IconComponent = Bell;
             let color = "#6366F1";
             if (toast.type === "chat") {
-              icon = "💬";
+              IconComponent = MessageSquare;
               color = "#0891B2";
             } else if (toast.type === "revision") {
-              icon = "✅";
+              IconComponent = CheckCircle;
               color = "#059669";
             }
 
@@ -2116,7 +2121,7 @@ export default function ConsultationsScreen() {
                   ...(Platform.OS === "web" ? { boxShadow: `0 0 16px ${color}1A` } : { shadowColor: color, shadowOpacity: 0.12, shadowRadius: 16 }),
                 }}
               >
-                <Text className="text-xl">{icon}</Text>
+                <IconComponent color={color} size={20} />
                 <View className="flex-1 gap-0.5">
                   <Text className="text-white text-[13px] font-extrabold">{toast.title}</Text>
                   <Text className="text-slate-300 text-[11px] font-medium" numberOfLines={2}>{toast.message}</Text>
@@ -2133,7 +2138,7 @@ export default function ConsultationsScreen() {
           <View className="bg-slate-900/[0.98] border border-amber-500/30 rounded-2xl p-6 mx-4 max-w-[420px] w-full gap-4">
             <View className="flex-row items-center gap-3">
               <View className="w-12 h-12 rounded-full bg-amber-500/20 items-center justify-center">
-                <Text className="text-2xl">⚠️</Text>
+                <AlertTriangle color="#D97706" size={24} />
               </View>
               <View className="flex-1">
                 <Text className="text-white text-lg font-black">Topik Tidak Sesuai</Text>

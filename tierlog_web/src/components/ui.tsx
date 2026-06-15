@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MotionDiv } from "@/src/lib/motion";
 import { cn } from "@/src/lib/utils";
 import { fadeIn } from "@/src/lib/animations";
@@ -32,6 +33,11 @@ export function Page({
   refreshing?: boolean;
   scrollable?: boolean;
 }) {
+  const insets = useSafeAreaInsets();
+  const isNative = Platform.OS !== "web";
+  const safeTop = isNative ? insets.top : 0;
+  const safeBottom = isNative ? insets.bottom : 0;
+
   const content = (
     <MotionDiv initial="hidden" animate="visible" variants={fadeIn} style={scrollable ? undefined : { flex: 1, display: "flex", flexDirection: "column" }}>
       <View className={cn("relative flex flex-col w-full gap-6", fullWidth ? "" : "max-w-[1200px] mx-auto", scrollable ? "" : (Platform.OS === "web" ? "flex-1 h-full" : "flex-1"))}>
@@ -51,7 +57,17 @@ export function Page({
     return (
       <View
         className="flex-1 bg-[#020617]"
-        style={[{ paddingVertical: 16, paddingHorizontal: 16, ...(Platform.OS === "web" ? { height: "100%" } : { flex: 1 }), display: "flex", flexDirection: "column" }, style]}
+        style={[
+          {
+            paddingTop: 16 + safeTop,
+            paddingBottom: 16 + safeBottom,
+            paddingHorizontal: 16,
+            ...(Platform.OS === "web" ? { height: "100%" } : { flex: 1 }),
+            display: "flex",
+            flexDirection: "column",
+          },
+          style,
+        ]}
       >
         {content}
       </View>
@@ -61,8 +77,18 @@ export function Page({
   return (
     <ScrollView
       className="flex-1 bg-[#020617]"
-      contentContainerStyle={[{ paddingVertical: 32, paddingHorizontal: 24, minHeight: "100%" as any }, contentContainerStyle]}
+      contentContainerStyle={[
+        {
+          paddingTop: 32 + safeTop,
+          paddingBottom: 32 + safeBottom,
+          paddingHorizontal: 24,
+          minHeight: "100%" as any,
+        },
+        contentContainerStyle,
+      ]}
       style={style}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       refreshControl={
         onRefresh && Platform.OS !== "web" ? (
           <RefreshControl
@@ -100,15 +126,18 @@ export function Heading({ title, subtitle }: { title: string; subtitle?: string 
 }
 
 // ─── Input Field ────────────────────────────────────────────
-export function Field(props: React.ComponentProps<typeof TextInput> & { label: string }) {
+export function Field(props: React.ComponentProps<typeof TextInput> & { label: string; rightElement?: React.ReactNode }) {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
-    <View className="mb-4 gap-1.5">
-      <Text className={cn(
-        "text-xs font-bold uppercase tracking-wider pl-0.5 text-[#94A3B8]",
-        isFocused && "text-[#4F46E5]"
-      )}>
+    <View className="mb-2.5 gap-1">
+      <Text
+        nativeID={`label-${props.label.replace(/\s+/g, '-').toLowerCase()}`}
+        className={cn(
+          "text-xs font-bold uppercase tracking-wider pl-0.5 text-[#94A3B8]",
+          isFocused && "text-[#4F46E5]"
+        )}
+      >
         {props.label}
       </Text>
       <View className="relative">
@@ -120,22 +149,33 @@ export function Field(props: React.ComponentProps<typeof TextInput> & { label: s
             style={{ position: "absolute", top: -1, left: -1, right: -1, bottom: -1, borderRadius: 12, borderWidth: 2, borderColor: "rgba(99,102,241,0.4)", pointerEvents: "none" }}
           />
         )}
-        <TextInput
-          placeholderTextColor="#94A3B8"
-          {...props}
-          onFocus={(e) => { setIsFocused(true); props.onFocus?.(e); }}
-          onBlur={(e) => { setIsFocused(false); props.onBlur?.(e); }}
-          className={cn(
-            "rounded-xl px-4 py-3.5 text-sm font-medium text-[#F8FAFC] border outline-none",
-            isFocused
-              ? "bg-white/[0.04] border-[#6366F1]"
-              : "bg-white/[0.02] border-white/[0.08]"
+        <View style={{ position: "relative" }}>
+          <TextInput
+            accessibilityLabel={props.label}
+            accessibilityLabelledBy={`label-${props.label.replace(/\s+/g, '-').toLowerCase()}`}
+            placeholderTextColor="#94A3B8"
+            {...props}
+            onFocus={(e) => { setIsFocused(true); props.onFocus?.(e); }}
+            onBlur={(e) => { setIsFocused(false); props.onBlur?.(e); }}
+            className={cn(
+              "rounded-xl px-3.5 py-3 text-sm font-medium text-[#F8FAFC] border outline-none",
+              isFocused
+                ? "bg-white/[0.04] border-[#6366F1]"
+                : "bg-white/[0.04] border-white/15",
+              props.rightElement ? "pr-12" : ""
+            )}
+            style={[
+              props.style,
+              isFocused && Platform.OS === "web" ? { boxShadow: "0 0 12px rgba(99,102,241,0.2)" } : undefined,
+              Platform.OS !== "web" ? { fontSize: 16 } : undefined,
+            ]}
+          />
+          {props.rightElement && (
+            <View style={{ position: "absolute", right: 12, top: 0, bottom: 0, justifyContent: "center", alignItems: "center" }}>
+              {props.rightElement}
+            </View>
           )}
-          style={[
-            props.style,
-            isFocused && Platform.OS === "web" ? { boxShadow: "0 0 12px rgba(99,102,241,0.2)" } : undefined,
-          ]}
-        />
+        </View>
       </View>
     </View>
   );
@@ -184,7 +224,7 @@ export function Badge({ text, color }: { text: string; color?: string }) {
       style={{ borderColor: `${badgeColor}22`, backgroundColor: `${badgeColor}0A` }}
     >
       <Text
-        className="text-[10px] font-extrabold uppercase tracking-widest"
+        className="text-[11px] font-extrabold uppercase tracking-widest"
         numberOfLines={1}
         ellipsizeMode="tail"
         style={{ color: badgeColor }}
@@ -215,7 +255,7 @@ export function StatCard({
   return (
     <Pressable
       className={cn(
-        "flex-1 min-w-[45%] relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 sm:p-6",
+        "flex-1 min-w-[45%] relative overflow-hidden rounded-2xl border border-white/15 bg-white/[0.05] p-5 sm:p-6",
         className
       )}
       style={({ pressed }) => ({

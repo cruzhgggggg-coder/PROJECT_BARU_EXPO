@@ -112,19 +112,31 @@ func (h *Hub) readLoop(client *Client) {
 }
 
 func isValidRoom(room string) bool {
-	if !strings.HasPrefix(room, "consultation.") {
-		return false
-	}
-	idStr := strings.TrimPrefix(room, "consultation.")
-	if idStr == "" {
-		return false
-	}
-	for _, c := range idStr {
-		if c < '0' || c > '9' {
+	if strings.HasPrefix(room, "consultation.") {
+		idStr := strings.TrimPrefix(room, "consultation.")
+		if idStr == "" {
 			return false
 		}
+		for _, c := range idStr {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+		return true
 	}
-	return true
+	if strings.HasPrefix(room, "lecturer.") {
+		idStr := strings.TrimPrefix(room, "lecturer.")
+		if idStr == "" {
+			return false
+		}
+		for _, c := range idStr {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 func (h *Hub) pingLoop(client *Client) {

@@ -4,6 +4,7 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
+    "postinstall": "patch-package",
     "dev": "expo start --web",
     "dev:android": "expo start --android",
     "start": "expo start --web",
@@ -44,6 +45,7 @@
   "devDependencies": {
     "@babel/plugin-transform-class-static-block": "^7.29.7",
     "@types/react": "~19.1.10",
+    "patch-package": "^8.0.1",
     "prettier-plugin-tailwindcss": "^0.5.14",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.9.2"

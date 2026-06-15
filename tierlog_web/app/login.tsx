@@ -9,7 +9,7 @@ import { TextReveal } from "@/src/components/ui/text-reveal";
 import { GlassCard } from "@/src/components/ui/glass-card";
 import { ElegantButton } from "@/src/components/ui/elegant-button";
 import { AuthPageLayout } from "@/src/components/ui/auth-page-layout";
-import { Cpu } from "lucide-react-native";
+import { Cpu, Eye, EyeOff } from "lucide-react-native";
 import { useIsMobile } from "@/src/hooks";
 
 export default function LoginScreen() {
@@ -17,6 +17,7 @@ export default function LoginScreen() {
   const isMobile = useIsMobile();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -50,7 +51,7 @@ export default function LoginScreen() {
           <TextReveal text="Sign In to" className="text-4xl md:text-5xl font-black tracking-tight leading-tight text-white" />
           <TextReveal text="Your Workspace" delay={0.2} className="text-4xl md:text-5xl font-black tracking-tight leading-tight text-white" />
 
-          <Text className="text-white/40 text-sm leading-relaxed">
+          <Text className="text-white/50 text-sm leading-relaxed">
             Welcome back. Authenticate to access your consultation history, review
             advisor annotations, and continue your academic progress.
           </Text>
@@ -63,7 +64,7 @@ export default function LoginScreen() {
               <Text className="text-[10px] font-black uppercase tracking-[1px] text-indigo-400 mb-1">
                 Secure Data Transmission
               </Text>
-              <Text className="text-xs leading-[18px] text-white/40 font-medium">
+              <Text className="text-xs leading-[18px] text-white/50 font-medium">
                 Your credentials and academic submissions are encrypted in transit
                 and at rest to safeguard research confidentiality.
               </Text>
@@ -72,15 +73,15 @@ export default function LoginScreen() {
         </>
       }
       rightContent={
-        <GlassCard className={isMobile ? "p-5" : "p-8"}>
-          <Text className="text-xl font-black tracking-tight text-white mb-1">
-            User Authentication
+        <GlassCard className={isMobile ? "px-4 py-3" : "p-8"} style={isMobile ? { borderWidth: 0, backgroundColor: "transparent" } : undefined}>
+          <Text className={`${isMobile ? "text-lg" : "text-xl"} font-black tracking-tight text-white mb-0.5`}>
+            Welcome Back
           </Text>
-          <Text className="text-xs font-medium text-white/40 mb-6">
-            Provide your academic email address and account password.
+          <Text className={`text-xs font-medium text-white/50 ${isMobile ? "mb-2" : "mb-4"}`}>
+            Sign in with your academic email and password.
           </Text>
 
-          <View className="gap-1">
+          <View className="gap-0">
             <Field
               label="Academic Email Address"
               placeholder="email@university.edu"
@@ -88,34 +89,49 @@ export default function LoginScreen() {
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}
+              returnKeyType="next"
+              autoComplete="email"
             />
             <Field
               label="Account Password"
               placeholder="••••••••••••"
-              secureTextEntry
+              secureTextEntry={!showPassword}
               value={password}
               onChangeText={setPassword}
+              returnKeyType="done"
+              autoComplete="password"
+              onSubmitEditing={() => void handleLogin()}
+              rightElement={
+                <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={12}>
+                  {showPassword ? (
+                    <EyeOff size={18} color="#94A3B8" />
+                  ) : (
+                    <Eye size={18} color="#94A3B8" />
+                  )}
+                </Pressable>
+              }
             />
 
             {error ? (
-              <View className="bg-red-500/[0.06] border border-red-500/[0.15] rounded-xl p-3 mb-4">
+              <Pressable onPress={() => setError("")} className="bg-red-500/[0.06] border border-red-500/[0.15] rounded-xl p-3 mb-4">
                 <Text className="text-red-600 text-sm font-semibold text-center">{error}</Text>
-              </View>
+              </Pressable>
             ) : null}
 
-            <View className="mt-2">
+            <View className={`${isMobile ? "mt-1" : "mt-2"}`}>
               <ElegantButton
                 title={loading ? "Authenticating..." : "Sign In"}
                 onPress={() => void handleLogin()}
                 disabled={loading}
                 tone="primary"
+                accessibilityLabel="Sign in"
               />
             </View>
           </View>
 
-          <View className="flex-row justify-between items-center mt-6 pt-5 border-t border-white/[0.08]">
-            <Text className="text-xs text-white/30 font-medium">No account registered?</Text>
-            <Pressable onPress={() => router.push("/register")} className="py-1 px-1">
+          <View className={`flex-row justify-between items-center ${isMobile ? "mt-3 pt-3" : "mt-6 pt-5"} border-t border-white/15`}>
+            <Text className="text-xs text-white/50 font-medium">No account registered?</Text>
+            <Pressable onPress={() => router.push("/register")} className="py-3 px-3" accessibilityLabel="Create account">
               <Text className="text-xs font-extrabold text-indigo-400">Create Account →</Text>
             </Pressable>
           </View>
@@ -127,7 +143,8 @@ export default function LoginScreen() {
   if (isMobile) {
     return (
       <KeyboardAvoidingView
-        behavior={RNPlatform.OS === "ios" ? "padding" : undefined}
+        behavior={RNPlatform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={RNPlatform.OS === "ios" ? 0 : 20}
         style={{ flex: 1 }}
       >
         {content}

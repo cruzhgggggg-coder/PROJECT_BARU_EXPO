@@ -1,6 +1,6 @@
 import { Redirect, router } from "expo-router";
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, ScrollView, KeyboardAvoidingView, Platform as RNPlatform } from "react-native";
+import { View, Text, Pressable, ScrollView, KeyboardAvoidingView, Platform as RNPlatform, Dimensions, Modal } from "react-native";
 
 import { Field } from "@/src/components/ui";
 import { useAuth } from "@/src/providers/AuthProvider";
@@ -9,7 +9,7 @@ import { GradientText } from "@/src/components/ui/gradient-text";
 import { GlassCard } from "@/src/components/ui/glass-card";
 import { ElegantButton } from "@/src/components/ui/elegant-button";
 import { AuthPageLayout } from "@/src/components/ui/auth-page-layout";
-import { Shield } from "lucide-react-native";
+import { Shield, Eye, EyeOff } from "lucide-react-native";
 import { useIsMobile } from "@/src/hooks";
 
 export default function RegisterScreen() {
@@ -30,6 +30,7 @@ export default function RegisterScreen() {
     faculty: "",
     keahlian: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -127,7 +128,7 @@ export default function RegisterScreen() {
             Create Your{"\n"}Academic Profile
           </GradientText>
 
-          <Text className="text-white/40 text-sm leading-relaxed">
+          <Text className="text-white/50 text-sm leading-relaxed">
             Register your profile to initiate structured thesis tracking. Connect with
             your advisor, manage revision loops, and compile supervision milestones.
           </Text>
@@ -140,7 +141,7 @@ export default function RegisterScreen() {
               <Text className="text-[10px] font-black uppercase tracking-[1px] text-emerald-400 mb-1">
                 Role-Based Controls
               </Text>
-              <Text className="text-xs leading-[18px] text-white/40 font-medium">
+              <Text className="text-xs leading-[18px] text-white/50 font-medium">
                 Access levels are strictly segregated between students and advisors to
                 maintain professional boundaries and progress audit compliance.
               </Text>
@@ -150,38 +151,41 @@ export default function RegisterScreen() {
       }
       rightContent={
         <GlassCard
-          className={`${isMobile ? "p-5" : "p-8"} ${showLecturerDropdown ? "pb-48" : ""}`}
-          style={{ zIndex: showLecturerDropdown ? 50 : 1 }}
+          className={isMobile ? "px-4 py-3" : "p-8"}
+          style={isMobile
+            ? { borderWidth: 0, backgroundColor: "transparent", zIndex: showLecturerDropdown ? 50 : 1 }
+            : { zIndex: showLecturerDropdown ? 50 : 1 }
+          }
         >
-          <Text className="text-xl font-black tracking-tight text-white mb-1">
-            Registration Console
+          <Text className={`${isMobile ? "text-lg" : "text-xl"} font-black tracking-tight text-white mb-0.5`}>
+            Create Account
           </Text>
-          <Text className="text-xs font-medium text-white/40 mb-6">
-            Select your academic role and provide the required information.
+          <Text className={`text-xs font-medium text-white/50 ${isMobile ? "mb-2" : "mb-4"}`}>
+            Choose your role and fill in your details.
           </Text>
 
           {/* Role Switcher Tabs */}
-          <View className="flex-row bg-white/[0.02] border border-white/[0.08] rounded-xl p-1 mb-6 gap-1">
+          <View className={`flex-row bg-white/[0.02] border border-white/10 rounded-xl p-1 ${isMobile ? "mb-3" : "mb-6"} gap-1`}>
             <Pressable
               onPress={() => setRole("student")}
-              className={`flex-1 py-2.5 rounded-lg items-center justify-center ${
+              className={`flex-1 py-3 rounded-lg items-center justify-center ${
                 role === "student" ? "bg-indigo-600" : ""
               }`}
             >
               <Text className={`text-xs font-bold ${
-                role === "student" ? "text-white" : "text-white/40"
+                role === "student" ? "text-white" : "text-white/50"
               }`}>
                 Student Profile
               </Text>
             </Pressable>
             <Pressable
               onPress={() => setRole("lecturer")}
-              className={`flex-1 py-2.5 rounded-lg items-center justify-center ${
+              className={`flex-1 py-3 rounded-lg items-center justify-center ${
                 role === "lecturer" ? "bg-indigo-600" : ""
               }`}
             >
               <Text className={`text-xs font-bold ${
-                role === "lecturer" ? "text-white" : "text-white/40"
+                role === "lecturer" ? "text-white" : "text-white/50"
               }`}>
                 Academic Advisor
               </Text>
@@ -189,12 +193,14 @@ export default function RegisterScreen() {
           </View>
 
           {/* Form Fields */}
-          <View className="gap-1" style={{ zIndex: showLecturerDropdown ? 100 : 1, elevation: showLecturerDropdown ? 100 : 1 }}>
+          <View className="gap-0" style={{ zIndex: showLecturerDropdown ? 100 : 1, elevation: showLecturerDropdown ? 100 : 1 }}>
             <Field
               label="Full Name & Credentials"
               placeholder="Jonathan Doe, M.Sc."
               value={form.name}
               onChangeText={(v) => patch("name", v)}
+              returnKeyType="next"
+              autoComplete="name"
             />
             <Field
               label="Institutional Email Address"
@@ -203,13 +209,27 @@ export default function RegisterScreen() {
               keyboardType="email-address"
               value={form.email}
               onChangeText={(v) => patch("email", v)}
+              returnKeyType="next"
+              autoComplete="email"
             />
             <Field
               label="Account Password"
               placeholder="Minimum 8 characters"
-              secureTextEntry
+              secureTextEntry={!showPassword}
               value={form.password}
               onChangeText={(v) => patch("password", v)}
+              returnKeyType="done"
+              autoComplete="new-password"
+              onSubmitEditing={() => void handleRegister()}
+              rightElement={
+                <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={12}>
+                  {showPassword ? (
+                    <EyeOff size={18} color="#94A3B8" />
+                  ) : (
+                    <Eye size={18} color="#94A3B8" />
+                  )}
+                </Pressable>
+              }
             />
 
             {role === "student" ? (
@@ -230,7 +250,7 @@ export default function RegisterScreen() {
                     />
                   </View>
                   <View
-                    className={isMobile ? "w-full relative mb-4" : "flex-1 relative mb-4"}
+                    className={isMobile ? "w-full relative mb-2" : "flex-1 relative mb-2"}
                     style={{
                       zIndex: showLecturerDropdown ? 999 : 1,
                       elevation: showLecturerDropdown ? 999 : 1,
@@ -241,7 +261,7 @@ export default function RegisterScreen() {
                     </Text>
                     <Pressable
                       onPress={() => setShowLecturerDropdown(!showLecturerDropdown)}
-                      className="flex-row items-center justify-between bg-white/[0.02] border border-white/[0.08] rounded-xl px-4 py-3.5 h-[48px]"
+                      className="flex-row items-center justify-between bg-white/[0.02] border border-white/15 rounded-xl px-4 py-3.5 h-[48px]"
                       style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.98 : 1 }] }]}
                     >
                       <Text className="text-xs font-medium text-slate-200" numberOfLines={1}>
@@ -252,9 +272,69 @@ export default function RegisterScreen() {
                       </Text>
                     </Pressable>
 
-                    {showLecturerDropdown && (
+                    {isMobile && (
+                      <Modal
+                        visible={showLecturerDropdown}
+                        transparent={true}
+                        animationType="slide"
+                        onRequestClose={() => setShowLecturerDropdown(false)}
+                      >
+                        <View style={{ flex: 1, justifyContent: "flex-end" }}>
+                          <Pressable
+                            onPress={() => setShowLecturerDropdown(false)}
+                            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)" }}
+                          />
+                          <View style={{ backgroundColor: "#0F172A", borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: 1, borderColor: "rgba(255,255,255,0.08)", padding: 16, maxHeight: Dimensions.get("window").height * 0.6 }}>
+                            <View style={{ alignItems: "center", marginBottom: 12 }}>
+                              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.2)", marginBottom: 12 }} />
+                              <Text className="text-sm font-bold text-white">Select Academic Advisor</Text>
+                            </View>
+                            <ScrollView nestedScrollEnabled={true} contentContainerStyle={{ gap: 6 }}>
+                              {lecturers.map((lec) => {
+                                const isSelected = String(lec.id) === form.lecturer_id;
+                                return (
+                                  <Pressable
+                                    key={lec.id}
+                                    onPress={() => {
+                                      patch("lecturer_id", String(lec.id));
+                                      setShowLecturerDropdown(false);
+                                    }}
+                                    className="flex-row items-center justify-between p-3 rounded-lg"
+                                    style={{
+                                      backgroundColor: isSelected ? "rgba(99, 102, 241, 0.08)" : "transparent",
+                                      borderWidth: 1,
+                                      borderColor: isSelected ? "rgba(99, 102, 241, 0.15)" : "transparent",
+                                    }}
+                                  >
+                                    <View className="flex-1">
+                                      <Text className={`text-sm font-bold ${isSelected ? "text-indigo-400" : "text-slate-300"}`} numberOfLines={1}>
+                                        {lec.name}
+                                      </Text>
+                                      <Text className="text-[11px] text-slate-500 mt-0.5">
+                                        NIP: {lec.nip} | {lec.faculty}
+                                      </Text>
+                                    </View>
+                                    {isSelected && <View className="w-2 h-2 rounded-full bg-indigo-500" />}
+                                  </Pressable>
+                                );
+                              })}
+                              {lecturers.length === 0 && (
+                                <Text className="text-slate-500 text-xs text-center py-3">
+                                  No advisors registered yet
+                                </Text>
+                              )}
+                            </ScrollView>
+                            <Pressable onPress={() => setShowLecturerDropdown(false)} className="mt-3 py-3 items-center">
+                              <Text className="text-indigo-400 text-sm font-bold">Cancel</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      </Modal>
+                    )}
+
+                    {!isMobile && showLecturerDropdown && (
                       <GlassCard
-                        className="absolute top-[54px] left-0 right-0 max-h-[200px] p-2 bg-slate-950/95 border-white/[0.08]"
+                        className="absolute top-[54px] left-0 right-0 max-h-[200px] p-2 bg-slate-950/95 border-white/15"
                         style={{
                           boxShadow: "0 10px 15px rgba(0,0,0,0.3)",
                           zIndex: 9999,
@@ -264,7 +344,6 @@ export default function RegisterScreen() {
                         <ScrollView
                           nestedScrollEnabled={true}
                           showsVerticalScrollIndicator={true}
-                          {...({ className: "ultra-thin-scroll" } as any)}
                           contentContainerStyle={{ gap: 6 }}
                         >
                           {lecturers.map((lec) => {
@@ -276,7 +355,7 @@ export default function RegisterScreen() {
                                   patch("lecturer_id", String(lec.id));
                                   setShowLecturerDropdown(false);
                                 }}
-                                className="flex-row items-center justify-between p-2 rounded-lg"
+                                className="flex-row items-center justify-between p-3 rounded-lg"
                                 style={({ pressed }) => [
                                   {
                                     backgroundColor: isSelected ? "rgba(99, 102, 241, 0.08)" : "transparent",
@@ -351,24 +430,25 @@ export default function RegisterScreen() {
             )}
 
             {error ? (
-              <View className="bg-red-500/[0.06] border border-red-500/[0.15] rounded-xl p-3 mb-4">
+              <Pressable onPress={() => setError("")} className="bg-red-500/[0.06] border border-red-500/[0.15] rounded-xl p-3 mb-4">
                 <Text className="text-red-600 text-sm font-semibold text-center">{error}</Text>
-              </View>
+              </Pressable>
             ) : null}
 
-            <View className="mt-2">
+            <View className={`${isMobile ? "mt-1" : "mt-2"}`}>
               <ElegantButton
                 title={loading ? "Registering Profile..." : "Register Profile"}
                 onPress={() => void handleRegister()}
                 disabled={loading}
                 tone="primary"
+                accessibilityLabel="Register account"
               />
             </View>
           </View>
 
-          <View className="flex-row justify-between items-center mt-6 pt-5 border-t border-white/[0.08]">
-            <Text className="text-xs text-white/30 font-medium">Already have a registered account?</Text>
-            <Pressable onPress={() => router.push("/login")} className="py-1 px-1">
+          <View className={`flex-row justify-between items-center ${isMobile ? "mt-3 pt-3" : "mt-6 pt-5"} border-t border-white/10`}>
+            <Text className="text-xs text-white/50 font-medium">Already have a registered account?</Text>
+            <Pressable onPress={() => router.push("/login")} className="py-3 px-3" accessibilityLabel="Sign in instead">
               <Text className="text-xs font-extrabold text-indigo-400">Sign In →</Text>
             </Pressable>
           </View>
@@ -380,7 +460,8 @@ export default function RegisterScreen() {
   if (isMobile) {
     return (
       <KeyboardAvoidingView
-        behavior={RNPlatform.OS === "ios" ? "padding" : undefined}
+        behavior={RNPlatform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={RNPlatform.OS === "ios" ? 0 : 20}
         style={{ flex: 1 }}
       >
         {content}

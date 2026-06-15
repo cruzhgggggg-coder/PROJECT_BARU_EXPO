@@ -107,6 +107,8 @@ function MultiImageInputNative({
       <View style={{ flexDirection: "row", gap: 8 }}>
         <Pressable
           onPress={() => void pickImage()}
+          accessibilityLabel="Add images"
+          accessibilityRole="button"
           style={({ pressed }) => ({
             flex: 1,
             minHeight: 80,
@@ -128,6 +130,8 @@ function MultiImageInputNative({
 
         <Pressable
           onPress={() => void pickDocx()}
+          accessibilityLabel="Add DOCX"
+          accessibilityRole="button"
           style={({ pressed }) => ({
             flex: 1,
             minHeight: 80,
@@ -188,7 +192,9 @@ function MultiImageInputNative({
               </View>
               <Pressable
                 onPress={() => removeFile(idx)}
-                style={{ padding: 6, backgroundColor: "rgba(239, 68, 68, 0.1)", borderRadius: 8 }}
+                accessibilityLabel="Remove image"
+                accessibilityRole="button"
+                style={{ padding: 12, backgroundColor: "rgba(239, 68, 68, 0.1)", borderRadius: 8 }}
               >
                 <Text style={{ color: "#ef4444", fontSize: 12 }}>✕</Text>
               </Pressable>
@@ -281,10 +287,12 @@ export function MultiImageInput({
         onDrop={handleDrop}
         style={{ width: "100%" }}
       >
-        <Pressable
-          onPress={() => fileInputRef.current?.click()}
-          onHoverIn={() => setIsHovered(true)}
-          onHoverOut={() => setIsHovered(false)}
+              <Pressable
+                onPress={() => fileInputRef.current?.click()}
+                accessibilityLabel="Add images"
+                accessibilityRole="button"
+                onHoverIn={() => setIsHovered(true)}
+                onHoverOut={() => setIsHovered(false)}
           style={({ pressed }) => [
             styles.dropzone,
             isGlowing && { boxShadow: "0 0 20px rgba(167, 139, 250, 0.18)" },
@@ -335,6 +343,8 @@ export function MultiImageInput({
               </View>
               <Pressable
                 onPress={() => removeFile(idx)}
+                accessibilityLabel="Remove image"
+                accessibilityRole="button"
                 style={({ pressed }) => [
                   styles.removeBtn,
                   { opacity: pressed ? 0.7 : 1 },
@@ -426,7 +436,7 @@ const styles = StyleSheet.create({
   previewName: { color: "#e2e8f0", fontSize: 12, fontWeight: "600" },
   previewType: { color: "#64748b", fontSize: 10, marginTop: 2 },
   removeBtn: {
-    padding: 6,
+    padding: 12,
     backgroundColor: "rgba(239, 68, 68, 0.1)",
     borderRadius: 8,
   },

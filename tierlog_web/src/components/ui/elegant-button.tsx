@@ -6,12 +6,17 @@ if (Platform.OS !== "web") {
   var Haptics = require("expo-haptics");
 }
 
+let motionModule: any;
+if (Platform.OS === "web") {
+  motionModule = require("framer-motion");
+}
+
 type ButtonTone = "primary" | "secondary" | "danger" | "success" | "warning";
 type ButtonSize = "sm" | "md" | "lg";
 
 const toneStyles: Record<ButtonTone, string> = {
   primary: "bg-[#4F46E5] border-[#4F46E5]/20",
-  secondary: "bg-white/[0.04] border-white/[0.08]",
+  secondary: "bg-white/[0.04] border-white/15",
   danger: "bg-[#EF4444] border-[#EF4444]/20",
   success: "bg-[#059669] border-[#059669]/20",
   warning: "bg-[#D97706] border-[#D97706]/20",
@@ -26,8 +31,8 @@ const toneGlows: Record<ButtonTone, string> = {
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  sm: "py-2 px-4 text-xs rounded-lg",
-  md: "py-3 px-6 text-sm rounded-xl",
+  sm: "py-2.5 px-4 text-xs rounded-lg",
+  md: "py-3.5 px-6 text-sm rounded-xl",
   lg: "py-4 px-8 text-base rounded-xl",
 };
 
@@ -45,20 +50,24 @@ export function ElegantButton({
   size?: ButtonSize;
 }) {
   if (Platform.OS === "web") {
-    const { motion } = require("framer-motion");
-    const MotionDiv = motion.div;
+    const MotionBtn = motionModule.motion.button;
     return (
-      <MotionDiv
+      <MotionBtn
+        type="button"
         onClick={disabled ? undefined : onPress}
-        aria-disabled={disabled}
-        whileTap={{ scale: 0.95 }}
-        whileHover={{ scale: 1.025 }}
+        disabled={disabled}
+        whileTap={disabled ? undefined : { scale: 0.97 }}
+        whileHover={disabled ? undefined : { scale: 1.02 }}
         className={cn(
-          "flex items-center justify-center border cursor-pointer w-full",
+          "flex items-center justify-center rounded-xl border w-full",
           toneStyles[tone],
           sizeStyles[size],
           disabled && "opacity-50"
         )}
+        style={{
+          cursor: disabled ? "not-allowed" : "pointer",
+        }}
+        {...(disabled ? { "aria-disabled": true } : {})}
       >
         <Text
           className={cn(
@@ -71,12 +80,14 @@ export function ElegantButton({
         >
           {title}
         </Text>
-      </MotionDiv>
+      </MotionBtn>
     );
   }
 
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       onPress={
         disabled
           ? undefined
