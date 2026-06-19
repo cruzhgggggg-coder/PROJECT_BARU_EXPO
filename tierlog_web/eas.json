@@ -1,0 +1,25 @@
+{
+  "cli": {
+    "version": ">= 5.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://priced-employers-hopkins-talent.trycloudflare.com"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://priced-employers-hopkins-talent.trycloudflare.com"
+      }
+    },
+    "production": {
+      "android": { "buildType": "apk" }
+    }
+  }
+}

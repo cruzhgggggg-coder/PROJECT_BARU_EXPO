@@ -1,0 +1,121 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * TierLog global styles — centralized via CSS variables mirroring the
+ * `tier.*` Tailwind tokens in tailwind.config.js. Keeping these in sync
+ * means the dark theme can be re-skinned from one place if ever needed.
+ * (Phase 1 keeps dark theme by design — see DESIGN_SYSTEM.md.)
+ */
+
+@layer base {
+  :root {
+    /* Mirrors tier.* tokens. Single source of truth for base layer. */
+    --tier-bg: #020617;
+    --tier-bg-deep: #010305;
+    --tier-surface: #0f172a;
+    --tier-text-primary: #f8fafc;
+    --tier-text-secondary: #94a3b8;
+    --tier-text-tertiary: #64748b;
+    --tier-accent: #6366f1;
+    --tier-accent-deep: #4f46e5;
+    --tier-divider: rgba(255, 255, 255, 0.12);
+    --tier-divider-light: rgba(255, 255, 255, 0.08);
+    color-scheme: dark;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.5); /* tier-surface at 0.5 */
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.35); /* tier-accent at 0.35 */
+    border-radius: 99px;
+    border: 2px solid var(--tier-bg);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.6);
+  }
+  ::selection {
+    background: rgba(99, 102, 241, 0.4); /* tier-accent selection */
+    color: #ffffff;
+  }
+
+  html,
+  body,
+  #root,
+  div[data-reactroot] {
+    background-color: var(--tier-bg) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100% !important;
+    width: 100% !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    min-width: 100vw !important;
+    overflow-x: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+      Roboto, Helvetica, Arial, sans-serif;
+    color: var(--tier-text-primary);
+  }
+  #root > div {
+    height: 100% !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  html {
+    overscroll-behavior-y: none;
+  }
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #f8fafc; /* tier-text-primary */
+    -webkit-box-shadow: 0 0 0px 1000px #0f172a inset; /* tier-surface */
+    transition: background-color 5000s ease-in-out 0s;
+  }
+  canvas {
+    outline: none !important;
+  }
+  * {
+    -webkit-tap-highlight-color: transparent !important;
+  }
+
+  /* Focus indicator — visible, on-brand, meets WCAG 2px minimum. */
+  :focus-visible {
+    outline: 2px solid var(--tier-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: none;
+  }
+
+  /* iOS Safari auto-zoom prevention: min 16px font on inputs */
+  @media screen and (max-width: 768px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+    /* Hide desktop-only scrollbar on mobile */
+    ::-webkit-scrollbar {
+      width: 0px;
+      height: 0px;
+    }
+  }
+}

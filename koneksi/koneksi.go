@@ -1,0 +1,109 @@
+package koneksi
+
+import (
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"testing_go/models"
+
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+)
+
+var DB *gorm.DB
+
+func envOrDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func ConnectDatabase() {
+	user := envOrDefault("DB_USERNAME", "root")
+	password := envOrDefault("DB_PASSWORD", "")
+	host := envOrDefault("DB_HOST", "127.0.0.1")
+	port := envOrDefault("DB_PORT", "3306")
+	dbname := envOrDefault("DB_DATABASE", "struct_go")
+
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", user, password, host, port, dbname)
+	
+	var gormConfig gorm.Config
+	if os.Getenv("GIN_MODE") != "release" {
+		gormConfig = gorm.Config{
+			Logger: logger.Default.LogMode(logger.Info),
+		}
+	} else {
+		gormConfig = gorm.Config{}
+	}
+
+	database, err := gorm.Open(mysql.Open(dsn), &gormConfig)
+	if err != nil {
+		panic("An error occurred while connecting to the database: " + err.Error())
+	}
+
+	// Clean up old self-referential feedback_items constraint to prevent duplicate key constraint name error during migration
+	migrator := database.Migrator()
+	if migrator.HasConstraint(&models.FeedbackItem{}, "fk_feedback_items_comments") {
+		_ = migrator.DropConstraint(&models.FeedbackItem{}, "fk_feedback_items_comments")
+	}
+	if migrator.HasColumn(&models.FeedbackItem{}, "parent_id") {
+		_ = migrator.DropColumn(&models.FeedbackItem{}, "parent_id")
+	}
+
+	// P-7: AutoMigrate is used for development convenience.
+	// For production, replace with versioned migration files (e.g., golang-migrate/migrate)
+	// to avoid unintended schema changes on server restart.
+	if err := database.AutoMigrate(
+		&models.User{},
+		&models.Lecturer{},
+		&models.Student{},
+		&models.ConsultationLog{},
+		&models.FeedbackItem{},
+		&models.FeedbackComment{},
+		&models.RevisionAnnotation{},
+		&models.RedeemCode{},
+		&models.RefreshToken{},
+		&models.DirectMessage{},
+		&models.AIChatMessage{},
+	); err != nil {
+		panic("An error occurred during database migration: " + err.Error())
+	}
+
+	// Clean up accidental consultation_log_id column and its foreign key constraints created by GORM prior to the mapping fix
+	migrator = database.Migrator()
+	if migrator.HasConstraint(&models.FeedbackItem{}, "feedback_items_consultation_log_id_foreign") {
+		_ = migrator.DropConstraint(&models.FeedbackItem{}, "feedback_items_consultation_log_id_foreign")
+	}
+	if migrator.HasConstraint(&models.FeedbackItem{}, "fk_consultation_logs_feedback_items") {
+		_ = migrator.DropConstraint(&models.FeedbackItem{}, "fk_consultation_logs_feedback_items")
+	}
+	if migrator.HasColumn(&models.FeedbackItem{}, "consultation_log_id") {
+		_ = migrator.DropColumn(&models.FeedbackItem{}, "consultation_log_id")
+	}
+
+	// Q-4: Only run ALTER TABLE if the column type needs updating (check first)
+	var columnType string
+	if err := database.Raw("SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'feedback_items' AND COLUMN_NAME = 'status'").Scan(&columnType).Error; err == nil {
+		if !strings.Contains(columnType, "Validated") {
+			if alterErr := database.Exec("ALTER TABLE feedback_items MODIFY COLUMN status ENUM('Fixed', 'Pending', 'Validated') NOT NULL DEFAULT 'Pending'").Error; alterErr != nil {
+				fmt.Printf("[DB] Warning: Failed to update status enum: %v\n", alterErr)
+			}
+		}
+	}
+
+	// Production-grade connection pooling optimization
+	sqlDB, err := database.DB()
+	if err == nil {
+		sqlDB.SetMaxIdleConns(15)
+		sqlDB.SetMaxOpenConns(150)
+		sqlDB.SetConnMaxLifetime(30 * time.Minute)
+		sqlDB.SetConnMaxIdleTime(10 * time.Minute)
+	}
+
+	DB = database
+	fmt.Println("Database connection successful!")
+}
