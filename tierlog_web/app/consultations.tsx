@@ -797,8 +797,14 @@ export default function ConsultationsScreen() {
                 <GlassCard className={!isMobile ? "flex-[3.5] min-w-[500px] p-6 h-[720px] flex flex-col justify-between" : "w-full p-5 flex flex-col gap-4"}>
                   <View className="flex-1 gap-4">
                     {/* Header: Session Selector & Download Manuscript */}
-                    <View className="flex-col border-b border-tier-divider-light pb-3.5 gap-3 w-full">
-                      <View className="flex-row justify-between items-start gap-4 flex-wrap">
+                    <View 
+                      className="flex-col border-b border-tier-divider-light pb-3.5 gap-3 w-full"
+                      style={{ zIndex: showArchiveDropdown ? 50 : 1, elevation: showArchiveDropdown ? 50 : 1 }}
+                    >
+                      <View 
+                        className="flex-row justify-between items-start gap-4 flex-wrap"
+                        style={{ zIndex: showArchiveDropdown ? 51 : 1, elevation: showArchiveDropdown ? 51 : 1 }}
+                      >
                         <View className="gap-1 flex-1">
                           <Text className="text-lg font-black tracking-tight text-tier-text-primary">Advisory Workspace</Text>
                           {selected && (
@@ -816,7 +822,10 @@ export default function ConsultationsScreen() {
 
                         {/* Dropdown session selector (always visible at top of left panel on desktop) */}
                         {!isMobile && (
-                          <View className="relative z-[99] min-w-[200px]">
+                          <View 
+                            className="relative min-w-[200px]"
+                            style={{ zIndex: showArchiveDropdown ? 100 : 1, elevation: showArchiveDropdown ? 100 : 1 }}
+                          >
                             <Pressable
                               onPress={() => setShowArchiveDropdown(!showArchiveDropdown)}
                               className="flex-row items-center justify-between bg-tier-surface border border-tier-divider-light rounded-xl px-3.5 py-2"
@@ -837,9 +846,11 @@ export default function ConsultationsScreen() {
 
                             {showArchiveDropdown && (
                               <GlassCard
-                                className="absolute top-10 right-0 w-[240px] max-h-[200px] p-2 z-[999] bg-tier-surface border-tier-divider-light"
+                                className="absolute top-10 right-0 w-[240px] max-h-[200px] p-2 bg-tier-surface border-tier-divider-light"
                                 style={{
                                   boxShadow: "0 10px 15px rgba(0,0,0,0.2)",
+                                  zIndex: 9999,
+                                  elevation: 9999,
                                 }}
                               >
                                 <ScrollView nestedScrollEnabled showsVerticalScrollIndicator contentContainerStyle={{ gap: 6 }}>
