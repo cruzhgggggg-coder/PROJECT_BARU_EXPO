@@ -172,24 +172,7 @@ export default function WelcomeScreen() {
               Track revisions, collaborate on annotations, and verify milestones in real-time.
             </Text>
 
-            {/* CTA Buttons */}
-            <View className="flex-row gap-4 mt-8 w-full max-w-xs md:max-w-md justify-center">
-              <View className="flex-1 max-w-[200px]">
-                <ElegantButton
-                  title="Get Started Free"
-                  tone="primary"
-                  size="lg"
-                  onPress={() => router.push("/register")}
-                />
-              </View>
-              <View className="flex-1 max-w-[200px]">
-                <ElegantButton
-                  title="Watch Demo"
-                  tone="secondary"
-                  size="lg"
-                />
-              </View>
-            </View>
+
 
 
           </MotionDiv>
