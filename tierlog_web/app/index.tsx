@@ -202,14 +202,14 @@ export default function WelcomeScreen() {
         {/* FEATURES BENTO GRID */}
         <ScrollReveal delay={0.1}>
           <ResponsiveContainer className="py-20 md:py-32">
-            <View className="items-center text-center mb-12">
-              <Text className="text-xs font-bold uppercase tracking-widest text-tier-accent-indigo">
+            <View className="items-center justify-center text-center mb-12">
+              <Text className="text-xs font-bold uppercase tracking-widest text-tier-accent-indigo text-center">
                 Powerful Features
               </Text>
-              <Text className="text-3xl md:text-5xl font-black text-tier-text-primary mt-2">
+              <Text className="text-3xl md:text-5xl font-black text-tier-text-primary mt-2 text-center">
                 Power Up Your Thesis
               </Text>
-              <Text className="text-tier-text-secondary text-sm md:text-base max-w-lg mt-3">
+              <Text className="text-tier-text-secondary text-sm md:text-base max-w-lg mt-3 text-center">
                 Five AI-driven supervisor tools designed to take you from initial consultation to successful defense.
               </Text>
             </View>
