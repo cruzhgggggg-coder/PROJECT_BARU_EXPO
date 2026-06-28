@@ -1,18 +1,24 @@
 // src/lib/animations.ts
 
 export const fadeIn = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
   hidden: { opacity: 0 },
   visible: { opacity: 1 },
   transition: { duration: 0.5, ease: [0.23, 0.86, 0.39, 0.96] },
 };
 
 export const fadeUp = {
+  initial: { opacity: 0, y: 30 },
+  animate: { opacity: 1, y: 0 },
   hidden: { opacity: 0, y: 30 },
   visible: { opacity: 1, y: 0 },
   transition: { duration: 0.6, ease: [0.23, 0.86, 0.39, 0.96] },
 };
 
 export const slideDown = {
+  initial: { opacity: 0, y: -20 },
+  animate: { opacity: 1, y: 0 },
   hidden: { opacity: 0, y: -20 },
   visible: { opacity: 1, y: 0 },
   transition: { duration: 0.4, ease: [0.23, 0.86, 0.39, 0.96] },

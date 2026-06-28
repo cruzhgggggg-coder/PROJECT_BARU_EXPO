@@ -149,7 +149,7 @@ export default function WelcomeScreen() {
       >
         {/* HERO SECTION */}
         <ResponsiveContainer className="py-20 md:py-32 items-center text-center">
-          <MotionDiv {...animations.fadeUp} className="items-center">
+          <MotionDiv initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="items-center w-full">
             {/* Badge */}
             <View className="flex-row items-center gap-2 px-3 py-1.5 rounded-full bg-tier-accent-indigo/10 border border-tier-accent-indigo/20 mb-6">
               <View className="w-1.5 h-1.5 rounded-full bg-tier-accent-indigo animate-pulse" />
