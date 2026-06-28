@@ -14,6 +14,7 @@ import { GlassCard } from "@/src/components/ui/glass-card";
 import { ElegantButton } from "@/src/components/ui/elegant-button";
 import { ResponsiveContainer } from "@/src/components/layout/ResponsiveContainer";
 import { GlowingSlideText } from "@/src/components/ui/GlowingSlideText";
+import { ShaderBackground } from "@/src/components/ui/shader-background";
 
 export default function WelcomeScreen() {
   const { user } = useAuth();
@@ -70,6 +71,7 @@ export default function WelcomeScreen() {
   return (
     <View className="flex-1 bg-tier-bg relative">
       {/* Background decorations */}
+      <ShaderBackground />
       <FloatingOrbs />
 
       {/* FIXED NAVBAR */}
