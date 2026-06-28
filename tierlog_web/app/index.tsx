@@ -13,6 +13,7 @@ import { ScrollReveal } from "@/src/components/ui/ScrollReveal";
 import { GlassCard } from "@/src/components/ui/glass-card";
 import { ElegantButton } from "@/src/components/ui/elegant-button";
 import { ResponsiveContainer } from "@/src/components/layout/ResponsiveContainer";
+import { GlowingSlideText } from "@/src/components/ui/GlowingSlideText";
 
 export default function WelcomeScreen() {
   const { user } = useAuth();
@@ -157,15 +158,13 @@ export default function WelcomeScreen() {
               </Text>
             </View>
 
-            {/* Headline */}
-            <Text className="text-4xl md:text-6xl lg:text-7xl font-black text-tier-text-primary tracking-tight max-w-4xl text-center leading-tight">
-              Elevate Your{"\n"}Academic Vision
-            </Text>
-
-            {/* Gradient Subtitle */}
-            <Text className="text-lg md:text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-violet-400 to-rose-400 mt-4 text-center">
-              Crafting Exceptional Consultations
-            </Text>
+            {/* Glowing Animated Headline */}
+            <GlowingSlideText
+              fixedPrefix="Elevate Your"
+              slidingWords={["Academic Vision", "Thesis Milestones", "Research Potential", "Consultation Flow"]}
+              subtitle="Crafting Exceptional Consultations"
+              className="my-2"
+            />
 
             {/* Description */}
             <Text className="text-tier-text-secondary text-base md:text-lg max-w-2xl mt-6 text-center leading-relaxed">
