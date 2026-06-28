@@ -8,6 +8,7 @@ import { fadeUp } from "@/src/lib/animations";
 import { motionPresets } from "@/src/lib/motion-config";
 import { useIsMobile } from "@/src/hooks";
 import { FloatingOrbs } from "@/src/components/ui/FloatingOrbs";
+import { ShaderBackground } from "@/src/components/ui/shader-background";
 
 /**
  * AuthPageLayout — shared wrapper for login & register screens.
@@ -33,6 +34,7 @@ export function AuthPageLayout({
       className="relative min-h-screen bg-tier-bg"
       style={isNative ? { paddingTop: insets.top } : undefined}
     >
+      <ShaderBackground />
       <FloatingOrbs />
       <ScrollView
         contentContainerStyle={{
