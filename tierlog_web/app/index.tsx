@@ -191,18 +191,7 @@ export default function WelcomeScreen() {
               </View>
             </View>
 
-            {/* Partner logos */}
-            <View className="mt-16 items-center gap-3">
-              <Text className="text-tier-text-tertiary text-xs font-bold uppercase tracking-widest">
-                Trusted by Students & Faculty At
-              </Text>
-              <View className="flex-row gap-6 md:gap-10 items-center justify-center opacity-60">
-                <Text className="text-tier-text-primary text-sm font-black tracking-tighter">BINUS UNIVERSITY</Text>
-                <Text className="text-tier-text-primary text-sm font-black tracking-tighter">ITB</Text>
-                <Text className="text-tier-text-primary text-sm font-black tracking-tighter">UNIVERSITAS INDONESIA</Text>
-                <Text className="text-tier-text-primary text-sm font-black tracking-tighter">UGM</Text>
-              </View>
-            </View>
+
           </MotionDiv>
         </ResponsiveContainer>
 
